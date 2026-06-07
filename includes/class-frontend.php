@@ -90,12 +90,13 @@ class SDT_Frontend {
 					<table class="sdt-fe-table">
 						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th></tr></thead>
 						<tbody>
-						<?php foreach ( $rows as $i => $r ) : ?>
+						<?php foreach ( $rows as $i => $r ) : $pos = $i + 1; ?>
 							<tr class="sdt-q-<?php echo (int) $r['qualified']; ?>">
 								<td><?php
-									if ( $r['qualified'] === 1 ) echo '🥇';
-									elseif ( $r['qualified'] === 2 ) echo '🥈';
-									else echo (int) ( $i + 1 ) . '.';
+									$icon = '';
+									if ( $r['qualified'] === 1 ) $icon = '🥇';
+									elseif ( $r['qualified'] === 2 ) $icon = '🥈';
+									echo $icon . ' ' . $pos . '.';
 								?></td>
 								<td><?php echo esc_html( $r['name'] ); ?></td>
 								<td><?php echo (int) $r['played']; ?></td>
@@ -121,8 +122,8 @@ class SDT_Frontend {
 			}
 		}
 		$labels = array(
-			'gold'   => '🏆 Goldrunde',
-			'silber' => '🥈 Silberrunde',
+			'gold'   => '🏆 Goldrunde (Plätze 1 + 2)',
+			'silber' => '🥈 Silberrunde (ab Platz 3)',
 		);
 		foreach ( $brackets as $phase => $rounds_data ) {
 			if ( empty( $rounds_data ) ) continue;

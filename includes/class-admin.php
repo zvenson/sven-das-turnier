@@ -384,12 +384,13 @@ class SDT_Admin {
 					<table class="wp-list-table widefat striped">
 						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th></tr></thead>
 						<tbody>
-						<?php foreach ( $rows as $i => $r ) : ?>
+						<?php foreach ( $rows as $i => $r ) : $pos = $i + 1; ?>
 							<tr class="sdt-q-<?php echo (int) $r['qualified']; ?>">
 								<td><?php
-									if ( $r['qualified'] === 1 ) echo '🥇';
-									elseif ( $r['qualified'] === 2 ) echo '🥈';
-									else echo (int) ( $i + 1 ) . '.';
+									$icon = '';
+									if ( $r['qualified'] === 1 ) $icon = '🥇';
+									elseif ( $r['qualified'] === 2 ) $icon = '🥈';
+									echo $icon . ' ' . $pos . '.';
 								?></td>
 								<td><?php echo esc_html( $r['name'] ); ?></td>
 								<td><?php echo (int) $r['played']; ?></td>
@@ -455,8 +456,8 @@ class SDT_Admin {
 		}
 
 		$labels = array(
-			'gold'   => array( 'title' => '🏆 Goldrunde (1.-Platzierte)', 'class' => 'sdt-bracket-gold' ),
-			'silber' => array( 'title' => '🥈 Silberrunde (2.-Platzierte)', 'class' => 'sdt-bracket-silber' ),
+			'gold'   => array( 'title' => '🏆 Goldrunde (Plätze 1 + 2)', 'class' => 'sdt-bracket-gold' ),
+			'silber' => array( 'title' => '🥈 Silberrunde (ab Platz 3)', 'class' => 'sdt-bracket-silber' ),
 		);
 
 		foreach ( $brackets as $phase => $rounds_data ) {

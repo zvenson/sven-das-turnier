@@ -137,20 +137,32 @@ class SDT_Scheduler {
 	public static function generate_brackets( $tournament_id ) {
 		$standings = self::standings( $tournament_id );
 
-		$firsts  = array();
-		$seconds = array();
+		// Gold: alle 1.- und 2.-Plätze. Silber: alle ab Platz 3.
+		// Seeding-Reihenfolge: erst alle 1., dann 2., dann 3., dann 4. — gruppen-alphabetisch
+		$tiers = array();
 		foreach ( $standings as $label => $rows ) {
-			if ( isset( $rows[0] ) ) $firsts[]  = $rows[0];
-			if ( isset( $rows[1] ) ) $seconds[] = $rows[1];
+			foreach ( $rows as $idx => $r ) {
+				$tiers[ $idx ][] = $r;
+			}
+		}
+
+		$gold_seeds   = array();
+		$silber_seeds = array();
+		foreach ( $tiers as $idx => $rows ) {
+			if ( $idx < 2 ) {
+				foreach ( $rows as $r ) $gold_seeds[] = $r;
+			} else {
+				foreach ( $rows as $r ) $silber_seeds[] = $r;
+			}
 		}
 
 		SDT_DB::delete_bracket_matches( $tournament_id );
 
-		if ( count( $firsts ) >= 2 ) {
-			self::build_bracket( $tournament_id, 'gold', $firsts );
+		if ( count( $gold_seeds ) >= 2 ) {
+			self::build_bracket( $tournament_id, 'gold', $gold_seeds );
 		}
-		if ( count( $seconds ) >= 2 ) {
-			self::build_bracket( $tournament_id, 'silber', $seconds );
+		if ( count( $silber_seeds ) >= 2 ) {
+			self::build_bracket( $tournament_id, 'silber', $silber_seeds );
 		}
 	}
 
@@ -351,11 +363,11 @@ class SDT_Scheduler {
 				return strcmp( $a['name'], $b['name'] );
 			} );
 
-			if ( $group_done && count( $rows ) >= 1 ) {
-				$rows[0]['qualified'] = 1;
-				if ( isset( $rows[1] ) ) {
-					$rows[1]['qualified'] = 2;
+			if ( $group_done ) {
+				foreach ( $rows as $i => &$r ) {
+					$r['qualified'] = $i < 2 ? 1 : 2; // 1 = Gold, 2 = Silber
 				}
+				unset( $r );
 			}
 
 			$by_group[ $label ] = $rows;
