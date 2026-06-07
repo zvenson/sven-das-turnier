@@ -17,6 +17,15 @@ jQuery(function ($) {
 		});
 	}
 
+	function playerLi(id, name) {
+		var $li = $('<li class="sdt-player">')
+			.attr('data-pid', id)
+			.append('<span class="sdt-handle">⋮⋮</span>')
+			.append($('<span class="sdt-name">').text(name))
+			.append('<button type="button" class="sdt-del-player" title="Spieler löschen">×</button>');
+		return $li;
+	}
+
 	// --- Drag & Drop ---
 	if ($('.sdt-connected').length) {
 		$('.sdt-connected').sortable({
@@ -24,11 +33,44 @@ jQuery(function ($) {
 			handle: '.sdt-handle',
 			placeholder: 'sdt-placeholder',
 			tolerance: 'pointer',
+			receive: function (event, ui) {
+				var $item = ui.item;
+				var $list = $(this);
+
+				// Reg-Item in Reg-Liste fallen lassen: nicht erlaubt → revert
+				if ($list.hasClass('sdt-reg-list') && !$item.hasClass('sdt-reg-item')) {
+					ui.sender.sortable('cancel');
+					return;
+				}
+
+				// Reg-Item irgendwo eingelassen → AJAX-Import, DOM tauschen
+				if ($item.hasClass('sdt-reg-item')) {
+					var rid   = $item.data('rid');
+					var group = $list.data('group') || '';
+					if (group === '__reg__') return;
+					var pos   = $list.children().index($item);
+					$item.addClass('sdt-importing');
+					post('sdt_import_registration', {
+						tournament_id: tid,
+						registration_id: rid,
+						group_label: group,
+						position: pos
+					}).done(function (res) {
+						if (res && res.success) {
+							var $new = playerLi(res.data.id, res.data.name);
+							$item.replaceWith($new);
+							refreshCounts();
+						}
+					});
+				}
+			},
 			update: function (event, ui) {
 				if (this !== ui.item.parent()[0]) return;
 				var $item = ui.item;
+				if (!$item.hasClass('sdt-player')) return; // reg-items handled in receive
 				var $list = $item.parent();
 				var group = $list.data('group') || '';
+				if (group === '__reg__') return;
 				var pos   = $list.children('.sdt-player').index($item);
 				post('sdt_assign_player', {
 					player_id: $item.data('pid'),
@@ -85,7 +127,7 @@ jQuery(function ($) {
 	// --- Sieg eintragen ---
 	$(document).on('click', '.sdt-win', function () {
 		var $btn = $(this);
-		var mid  = $btn.closest('tr').data('mid');
+		var mid  = $btn.closest('[data-mid]').data('mid');
 		var wid  = $btn.data('winner');
 		$btn.prop('disabled', true);
 		post('sdt_set_winner', { match_id: mid, winner_id: wid }).done(function () {
@@ -93,11 +135,64 @@ jQuery(function ($) {
 		});
 	});
 
+	// --- 30 Demo-Spieler ---
+	$(document).on('click', '.sdt-demo', function () {
+		if (!confirm('30 Demo-Spieler hinzufügen?')) return;
+		var $btn = $(this).prop('disabled', true).text('Lege an…');
+		post('sdt_demo_players', { tournament_id: tid }).done(function () {
+			location.reload();
+		}).fail(function () {
+			$btn.prop('disabled', false).text('30 Demo-Spieler anlegen');
+		});
+	});
+
+	// --- Alle Spieler löschen ---
+	$(document).on('click', '.sdt-delete-all', function () {
+		if (!confirm('Wirklich ALLE Spieler dieses Turniers löschen?')) return;
+		var $btn = $(this).prop('disabled', true).text('Lösche…');
+		post('sdt_delete_all_players', { tournament_id: tid }).done(function () {
+			location.reload();
+		}).fail(function () {
+			$btn.prop('disabled', false).text('Alle Spieler löschen');
+		});
+	});
+
 	// --- Match zurücksetzen ---
 	$(document).on('click', '.sdt-reset', function () {
 		if (!confirm('Ergebnis zurücksetzen?')) return;
-		var mid = $(this).closest('tr').data('mid');
+		var $btn = $(this);
+		var $row = $btn.closest('[data-mid]');
+		var mid  = $row.data('mid');
 		post('sdt_reset_match', { match_id: mid }).done(function () {
+			location.reload();
+		});
+	});
+
+	// --- Vorrunde simulieren ---
+	$(document).on('click', '.sdt-simulate-groups', function () {
+		if (!confirm('Alle offenen Vorrunden-Spiele mit Zufalls-Siegern füllen?')) return;
+		var $btn = $(this).prop('disabled', true).text('Simuliere…');
+		post('sdt_simulate_groups', { tournament_id: tid }).done(function () {
+			location.reload();
+		}).fail(function () {
+			$btn.prop('disabled', false).text('🎲 Vorrunde simulieren');
+		});
+	});
+
+	// --- Brackets generieren ---
+	$(document).on('click', '.sdt-generate-brackets', function () {
+		var $btn = $(this).prop('disabled', true).text('Generiere…');
+		post('sdt_generate_brackets', { tournament_id: tid }).done(function () {
+			location.reload();
+		}).fail(function () {
+			$btn.prop('disabled', false).text('🏆 Gold- und Silberrunde generieren');
+		});
+	});
+
+	// --- Brackets zurücksetzen ---
+	$(document).on('click', '.sdt-reset-brackets', function () {
+		if (!confirm('Beide Brackets komplett zurücksetzen?')) return;
+		post('sdt_reset_brackets', { tournament_id: tid }).done(function () {
 			location.reload();
 		});
 	});

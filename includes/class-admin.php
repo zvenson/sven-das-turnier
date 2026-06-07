@@ -78,6 +78,11 @@ class SDT_Admin {
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::PAGE . '&action=edit&id=' . $id ) );
 			exit;
 		}
+
+		if ( ! empty( $_GET['action'] ) && $_GET['action'] === 'export' && ! empty( $_GET['id'] ) ) {
+			check_admin_referer( 'sdt_export' );
+			self::export_json( (int) $_GET['id'] );
+		}
 	}
 
 	public static function render() {
@@ -221,7 +226,34 @@ class SDT_Admin {
 		<h2>Spieler &amp; Gruppen</h2>
 		<p class="description">Spieler unten hinzufügen, dann per Drag-and-Drop in Gruppen ziehen. Max. 4 Spieler pro Gruppe ist üblich.</p>
 
-		<div class="sdt-setup">
+		<div class="sdt-testtools">
+			<strong>Test-Tools:</strong>
+			<button type="button" class="button sdt-demo">30 Demo-Spieler anlegen</button>
+			<button type="button" class="button sdt-delete-all">Alle Spieler löschen</button>
+		</div>
+
+		<?php $regs = SDT_DB::get_unimported_registrations( $t->id ); ?>
+
+		<div class="sdt-setup<?php echo ! empty( $regs ) ? ' sdt-setup-with-regs' : ''; ?>">
+
+			<?php if ( ! empty( $regs ) ) : ?>
+				<div class="sdt-registrations">
+					<h3>Aus Anmeldungen (<?php echo count( $regs ); ?>)</h3>
+					<p class="description">Per Drag in eine Gruppe oder „Unzugeordnet" ziehen — wird dann als Spieler übernommen.</p>
+					<ul class="sdt-droplist sdt-connected sdt-reg-list" data-group="__reg__">
+						<?php foreach ( $regs as $r ) : ?>
+							<li class="sdt-reg-item" data-rid="<?php echo (int) $r->id; ?>">
+								<span class="sdt-handle">⋮⋮</span>
+								<span class="sdt-name"><?php echo esc_html( trim( $r->first_name . ' ' . $r->last_name ) ); ?></span>
+								<?php if ( $r->status === 'waitlist' ) : ?>
+									<span class="sdt-reg-tag" title="Warteliste">W</span>
+								<?php endif; ?>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+				</div>
+			<?php endif; ?>
+
 			<div class="sdt-unassigned">
 				<h3>Unzugeordnet (<span class="sdt-count"><?php echo count( $by_group[''] ); ?></span>)</h3>
 				<ul class="sdt-droplist sdt-connected" data-group="">
@@ -264,17 +296,41 @@ class SDT_Admin {
 	}
 
 	private static function render_running( $t ) {
-		$matches   = SDT_DB::get_matches( $t->id );
-		$next      = SDT_Scheduler::next_matches( $t->id, $t->tables_count );
-		$standings = SDT_Scheduler::standings( $t->id );
+		$matches    = SDT_DB::get_matches( $t->id );
+		$group_matches = array_filter( $matches, function ( $m ) { return $m->phase === 'group'; } );
+		$next       = SDT_Scheduler::next_matches( $t->id, $t->tables_count );
+		$queue_size = max( 0, 6 - count( $next ) );
+		$queue      = SDT_Scheduler::upcoming_after( $t->id, array_map( function ( $m ) { return (int) $m->id; }, $next ), $queue_size );
+		$standings  = SDT_Scheduler::standings( $t->id );
+		$group_done = SDT_Scheduler::is_group_phase_done( $t->id );
+		$has_brackets = SDT_Scheduler::has_bracket_matches( $t->id );
 		$players   = array();
 		foreach ( SDT_DB::get_players( $t->id ) as $p ) {
 			$players[ $p->id ] = $p->name;
 		}
 
-		$done    = count( array_filter( $matches, function ( $m ) { return $m->status === 'done'; } ) );
-		$total   = count( $matches );
+		$done    = count( array_filter( $group_matches, function ( $m ) { return $m->status === 'done'; } ) );
+		$total   = count( $group_matches );
 		?>
+
+		<div class="sdt-testtools">
+			<strong>Test-Tools:</strong>
+			<?php if ( ! $group_done ) : ?>
+				<button type="button" class="button sdt-simulate-groups">🎲 Vorrunde simulieren (Zufalls-Ergebnisse)</button>
+			<?php endif; ?>
+			<?php if ( $has_brackets ) : ?>
+				<button type="button" class="button sdt-reset-brackets">Brackets zurücksetzen</button>
+			<?php endif; ?>
+		</div>
+
+		<?php if ( $group_done && ! $has_brackets ) : ?>
+			<div class="notice notice-success inline" style="margin:14px 0; padding:10px 14px;">
+				<p><strong>Vorrunde abgeschlossen!</strong> Jetzt die Brackets generieren, dann geht's in die KO-Phase.</p>
+				<p><button type="button" class="button button-primary sdt-generate-brackets">🏆 Gold- und Silberrunde generieren</button></p>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! $group_done ) : ?>
 		<h2>Nächste Spiele (<?php echo count( $next ); ?>/<?php echo (int) $t->tables_count; ?> Tische)</h2>
 		<?php if ( empty( $next ) ) : ?>
 			<p><?php echo $done === $total ? '<strong>Alle Spiele abgeschlossen!</strong>' : 'Keine spielbaren Matches.'; ?></p>
@@ -299,7 +355,28 @@ class SDT_Admin {
 			</table>
 		<?php endif; ?>
 
-		<h2>Tabellen-Stand <span class="description">(<?php echo (int) $done; ?>/<?php echo (int) $total; ?> Spiele abgeschlossen)</span></h2>
+		<?php if ( ! empty( $queue ) ) : ?>
+			<h3>Danach in der Warteschlange</h3>
+			<table class="wp-list-table widefat striped sdt-queue">
+				<thead><tr><th>Gruppe</th><th>Runde</th><th>Spieler 1</th><th></th><th>Spieler 2</th></tr></thead>
+				<tbody>
+				<?php foreach ( $queue as $m ) : ?>
+					<tr>
+						<td><strong><?php echo esc_html( $m->group_label ); ?></strong></td>
+						<td><?php echo (int) $m->round; ?></td>
+						<td><?php echo esc_html( $players[ $m->player1_id ] ?? '?' ); ?></td>
+						<td>vs.</td>
+						<td><?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		<?php endif; ?>
+		<?php endif; /* group_done */ ?>
+
+		<?php if ( $has_brackets ) : self::render_brackets( $t, $matches, $players ); endif; ?>
+
+		<h2>Vorrunden-Tabellen <span class="description">(<?php echo (int) $done; ?>/<?php echo (int) $total; ?> Spiele abgeschlossen)</span></h2>
 		<div class="sdt-standings">
 			<?php foreach ( $standings as $label => $rows ) : ?>
 				<div class="sdt-standing-group">
@@ -326,11 +403,11 @@ class SDT_Admin {
 			<?php endforeach; ?>
 		</div>
 
-		<h2 style="margin-top:30px;">Alle Spiele</h2>
+		<h2 style="margin-top:30px;">Alle Vorrunden-Spiele</h2>
 		<table class="wp-list-table widefat striped sdt-all">
 			<thead><tr><th>Gruppe</th><th>Runde</th><th>Begegnung</th><th>Ergebnis</th><th>Aktion</th></tr></thead>
 			<tbody>
-			<?php foreach ( $matches as $m ) : ?>
+			<?php foreach ( $group_matches as $m ) : ?>
 				<tr data-mid="<?php echo (int) $m->id; ?>">
 					<td><strong><?php echo esc_html( $m->group_label ); ?></strong></td>
 					<td><?php echo (int) $m->round; ?></td>
@@ -347,7 +424,7 @@ class SDT_Admin {
 						<?php endif; ?>
 					</td>
 					<td>
-						<?php if ( $m->status === 'done' ) : ?>
+						<?php if ( $m->status === 'done' && ! $has_brackets ) : ?>
 							<button class="button button-small sdt-reset">Zurücksetzen</button>
 						<?php endif; ?>
 					</td>
@@ -356,12 +433,109 @@ class SDT_Admin {
 			</tbody>
 		</table>
 
+		<p style="margin-top:24px;">
+			<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=' . self::PAGE . '&action=export&id=' . (int) $t->id ), 'sdt_export' ) ); ?>" class="button">💾 Backup herunterladen (JSON)</a>
+			<span class="description" style="margin-left:8px;">Aktueller Stand zum Sichern.</span>
+		</p>
+
 		<form method="post" style="margin-top:30px;" onsubmit="return confirm('Wirklich zurück auf Setup? Alle Spiele werden gelöscht!');">
 			<?php wp_nonce_field( 'sdt_reset' ); ?>
 			<input type="hidden" name="id" value="<?php echo (int) $t->id; ?>">
 			<button type="submit" name="sdt_reset_to_setup" class="button">Zurück zum Setup</button>
 		</form>
 		<?php
+	}
+
+	private static function render_brackets( $t, $matches, $players ) {
+		$brackets = array( 'gold' => array(), 'silber' => array() );
+		foreach ( $matches as $m ) {
+			if ( $m->phase === 'gold' || $m->phase === 'silber' ) {
+				$brackets[ $m->phase ][ (int) $m->bracket_round ][ (int) $m->bracket_position ] = $m;
+			}
+		}
+
+		$labels = array(
+			'gold'   => array( 'title' => '🏆 Goldrunde (1.-Platzierte)', 'class' => 'sdt-bracket-gold' ),
+			'silber' => array( 'title' => '🥈 Silberrunde (2.-Platzierte)', 'class' => 'sdt-bracket-silber' ),
+		);
+
+		foreach ( $brackets as $phase => $rounds_data ) {
+			if ( empty( $rounds_data ) ) continue;
+			ksort( $rounds_data );
+			$rounds_count = count( $rounds_data );
+			$last_round   = max( array_keys( $rounds_data ) );
+			$final_match  = $rounds_data[ $last_round ][0] ?? null;
+			?>
+			<h2 style="margin-top:30px;"><?php echo esc_html( $labels[ $phase ]['title'] ); ?></h2>
+			<?php if ( $final_match && $final_match->status === 'done' && $final_match->winner_id ) :
+				$winner_name = $players[ $final_match->winner_id ] ?? '?';
+				$loser_id    = (int) $final_match->winner_id === (int) $final_match->player1_id ? $final_match->player2_id : $final_match->player1_id;
+				$loser_name  = $players[ $loser_id ] ?? '?';
+			?>
+				<div class="sdt-final-result sdt-final-<?php echo esc_attr( $phase ); ?>">
+					<strong><?php echo $phase === 'gold' ? '🥇 Sieger Goldrunde' : '🥇 Sieger Silberrunde'; ?>:</strong>
+					<?php echo esc_html( $winner_name ); ?>
+					&nbsp;·&nbsp;
+					<strong>2.</strong> <?php echo esc_html( $loser_name ); ?>
+				</div>
+			<?php endif; ?>
+			<div class="sdt-bracket <?php echo esc_attr( $labels[ $phase ]['class'] ); ?>">
+				<?php foreach ( $rounds_data as $round_num => $matches_in_round ) :
+					ksort( $matches_in_round );
+					$round_title = $round_num === $rounds_count ? 'Finale' : ( $round_num === $rounds_count - 1 ? 'Halbfinale' : 'Runde ' . $round_num );
+					?>
+					<div class="sdt-bracket-round">
+						<div class="sdt-bracket-round-title"><?php echo esc_html( $round_title ); ?></div>
+						<?php foreach ( $matches_in_round as $m ) :
+							$p1     = $players[ $m->player1_id ] ?? '';
+							$p2     = $players[ $m->player2_id ] ?? '';
+							$ready  = $m->status === 'pending' && (int) $m->player1_id > 0 && (int) $m->player2_id > 0;
+							$done   = $m->status === 'done' && $m->winner_id;
+							$cls    = $done ? 'done' : ( $ready ? 'ready' : 'waiting' );
+							?>
+							<div class="sdt-bracket-match sdt-bm-<?php echo esc_attr( $cls ); ?>" data-mid="<?php echo (int) $m->id; ?>">
+								<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === (int) $m->player1_id ) ? 'sdt-bm-winner' : ''; ?>">
+									<span class="sdt-bm-name"><?php echo esc_html( $p1 ?: '–' ); ?></span>
+									<?php if ( $ready ) : ?>
+										<button class="button button-small sdt-win" data-winner="<?php echo (int) $m->player1_id; ?>">Sieg</button>
+									<?php endif; ?>
+								</div>
+								<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === (int) $m->player2_id ) ? 'sdt-bm-winner' : ''; ?>">
+									<span class="sdt-bm-name"><?php echo esc_html( $p2 ?: '–' ); ?></span>
+									<?php if ( $ready ) : ?>
+										<button class="button button-small sdt-win" data-winner="<?php echo (int) $m->player2_id; ?>">Sieg</button>
+									<?php endif; ?>
+								</div>
+								<?php if ( $done ) : ?>
+									<button class="button button-small sdt-reset sdt-bm-reset">↻</button>
+								<?php endif; ?>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<?php
+		}
+	}
+
+	private static function export_json( $tid ) {
+		$t       = SDT_DB::get_tournament( $tid );
+		$players = SDT_DB::get_players( $tid );
+		$matches = SDT_DB::get_matches( $tid );
+		$data = array(
+			'export_version' => 1,
+			'exported_at'    => current_time( 'mysql' ),
+			'tournament'     => $t,
+			'players'        => $players,
+			'matches'        => $matches,
+		);
+		$json = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+		$file = 'turnier-' . (int) $tid . '-' . date( 'Y-m-d-His' ) . '.json';
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=UTF-8' );
+		header( 'Content-Disposition: attachment; filename="' . $file . '"' );
+		echo $json;
+		exit;
 	}
 
 	private static function status_label( $s ) {

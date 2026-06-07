@@ -29,10 +29,12 @@ class SDT_DB {
 			name VARCHAR(190) NOT NULL,
 			group_label VARCHAR(5) NULL,
 			position SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+			registration_id BIGINT UNSIGNED NULL,
 			created_at DATETIME NOT NULL,
 			PRIMARY KEY  (id),
 			KEY tournament_id (tournament_id),
-			KEY group_label (group_label)
+			KEY group_label (group_label),
+			KEY registration_id (registration_id)
 		) $charset;";
 
 		$sql_m = "CREATE TABLE " . self::t_matches() . " (
@@ -41,14 +43,20 @@ class SDT_DB {
 			group_label VARCHAR(5) NOT NULL,
 			round TINYINT UNSIGNED NOT NULL,
 			position SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-			player1_id BIGINT UNSIGNED NOT NULL,
-			player2_id BIGINT UNSIGNED NOT NULL,
+			player1_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			player2_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			winner_id BIGINT UNSIGNED NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'pending',
 			finished_at DATETIME NULL,
+			phase VARCHAR(20) NOT NULL DEFAULT 'group',
+			bracket_round TINYINT UNSIGNED NULL,
+			bracket_position SMALLINT UNSIGNED NULL,
+			feeds_match_id BIGINT UNSIGNED NULL,
+			feeds_slot TINYINT UNSIGNED NULL,
 			PRIMARY KEY  (id),
 			KEY tournament_id (tournament_id),
 			KEY group_label (tournament_id, group_label),
+			KEY phase (tournament_id, phase),
 			KEY status (status)
 		) $charset;";
 
@@ -109,16 +117,37 @@ class SDT_DB {
 
 	/* ---------- players ---------- */
 
-	public static function add_player( $tournament_id, $name ) {
+	public static function add_player( $tournament_id, $name, $registration_id = null ) {
 		global $wpdb;
 		$wpdb->insert( self::t_players(), array(
-			'tournament_id' => (int) $tournament_id,
-			'name'          => $name,
-			'group_label'   => null,
-			'position'      => 0,
-			'created_at'    => current_time( 'mysql' ),
-		), array( '%d', '%s', '%s', '%d', '%s' ) );
+			'tournament_id'   => (int) $tournament_id,
+			'name'            => $name,
+			'group_label'     => null,
+			'position'        => 0,
+			'registration_id' => $registration_id ? (int) $registration_id : null,
+			'created_at'      => current_time( 'mysql' ),
+		), array( '%d', '%s', '%s', '%d', '%d', '%s' ) );
 		return (int) $wpdb->insert_id;
+	}
+
+	public static function get_unimported_registrations( $tournament_id ) {
+		global $wpdb;
+		$reg_table = $wpdb->prefix . 'sda_registrations';
+		$exists    = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $reg_table ) );
+		if ( ! $exists ) {
+			return array();
+		}
+		return $wpdb->get_results( $wpdb->prepare(
+			"SELECT r.id, r.first_name, r.last_name, r.email, r.status
+			 FROM $reg_table r
+			 WHERE r.id NOT IN (
+				SELECT COALESCE(registration_id, 0)
+				FROM " . self::t_players() . "
+				WHERE tournament_id = %d AND registration_id IS NOT NULL
+			 )
+			 ORDER BY r.status, r.first_name, r.last_name",
+			$tournament_id
+		) );
 	}
 
 	public static function delete_player( $id ) {
@@ -154,9 +183,59 @@ class SDT_DB {
 
 	public static function insert_match( $data ) {
 		global $wpdb;
-		$wpdb->insert( self::t_matches(), $data,
-			array( '%d', '%s', '%d', '%d', '%d', '%d', '%s' ) );
+		$types = array(
+			'tournament_id'    => '%d',
+			'group_label'      => '%s',
+			'round'            => '%d',
+			'position'         => '%d',
+			'player1_id'       => '%d',
+			'player2_id'       => '%d',
+			'winner_id'        => '%d',
+			'status'           => '%s',
+			'finished_at'      => '%s',
+			'phase'            => '%s',
+			'bracket_round'    => '%d',
+			'bracket_position' => '%d',
+			'feeds_match_id'   => '%d',
+			'feeds_slot'       => '%d',
+		);
+		$format = array();
+		foreach ( array_keys( $data ) as $k ) {
+			$format[] = $types[ $k ] ?? '%s';
+		}
+		$wpdb->insert( self::t_matches(), $data, $format );
 		return (int) $wpdb->insert_id;
+	}
+
+	public static function set_match_feeds( $match_id, $target_match_id, $slot ) {
+		global $wpdb;
+		return $wpdb->update(
+			self::t_matches(),
+			array( 'feeds_match_id' => (int) $target_match_id, 'feeds_slot' => (int) $slot ),
+			array( 'id' => (int) $match_id ),
+			array( '%d', '%d' ),
+			array( '%d' )
+		);
+	}
+
+	public static function set_match_player( $match_id, $slot, $player_id ) {
+		global $wpdb;
+		$col = ( (int) $slot === 1 ) ? 'player1_id' : 'player2_id';
+		return $wpdb->update(
+			self::t_matches(),
+			array( $col => (int) $player_id ),
+			array( 'id' => (int) $match_id ),
+			array( '%d' ),
+			array( '%d' )
+		);
+	}
+
+	public static function delete_bracket_matches( $tournament_id ) {
+		global $wpdb;
+		return $wpdb->query( $wpdb->prepare(
+			"DELETE FROM " . self::t_matches() . " WHERE tournament_id = %d AND phase != 'group'",
+			$tournament_id
+		) );
 	}
 
 	public static function delete_matches( $tournament_id ) {
