@@ -1,0 +1,10 @@
+*.log
+*.zip
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+node_modules/
+vendor/

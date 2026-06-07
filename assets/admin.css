@@ -1,0 +1,92 @@
+.sdt-status {
+	display: inline-block;
+	margin-left: 12px;
+	padding: 3px 10px;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 3px;
+	vertical-align: middle;
+}
+.sdt-status-setup    { background: #ddd; color: #444; }
+.sdt-status-running  { background: #2e7d32; color: #fff; }
+.sdt-status-finished { background: #1565c0; color: #fff; }
+
+.sdt-settings { margin: 12px 0 20px; }
+.sdt-settings summary { cursor: pointer; font-weight: 600; }
+
+.sdt-setup {
+	display: grid;
+	grid-template-columns: 280px 1fr;
+	gap: 24px;
+	margin-top: 16px;
+}
+.sdt-unassigned, .sdt-group {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 12px;
+}
+.sdt-groups {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 12px;
+}
+.sdt-unassigned h3, .sdt-group h3 {
+	margin: 0 0 8px;
+	font-size: 14px;
+}
+.sdt-droplist {
+	list-style: none;
+	margin: 0 0 8px;
+	padding: 0;
+	min-height: 80px;
+	background: #f6f7f7;
+	border: 1px dashed #c3c4c7;
+	border-radius: 3px;
+	padding: 6px;
+}
+.sdt-player {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	padding: 6px 8px;
+	margin-bottom: 4px;
+	cursor: default;
+}
+.sdt-handle {
+	cursor: move;
+	color: #999;
+	user-select: none;
+}
+.sdt-name { flex: 1; }
+.sdt-del-player {
+	background: transparent;
+	border: 0;
+	color: #b32d2e;
+	cursor: pointer;
+	font-size: 18px;
+	line-height: 1;
+	padding: 0 4px;
+}
+.sdt-placeholder {
+	background: #fffbcc;
+	border: 1px dashed #d4b300;
+	height: 32px;
+	margin-bottom: 4px;
+	border-radius: 3px;
+}
+.sdt-add-player-form { display: flex; gap: 6px; margin-top: 8px; }
+.sdt-add-player-form input { flex: 1; }
+
+.sdt-next .sdt-win { margin-right: 4px; }
+.sdt-standings {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 16px;
+}
+.sdt-standing-group h3 { margin: 0 0 6px; }
+.sdt-q-1 { background: #fff8d6 !important; font-weight: 600; }
+.sdt-q-2 { background: #f0f0f0 !important; font-weight: 600; }
