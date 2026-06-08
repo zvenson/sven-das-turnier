@@ -1,47 +1,151 @@
 .sdt-fe {
-	font-family: Arial, Helvetica, sans-serif;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 	max-width: 1100px;
-	margin: 1.5em 0;
+	margin: 1.5em auto;
+	color: #1a1a1a;
 }
-.sdt-fe-title { margin-bottom: 0.6em; }
-.sdt-fe h3 { margin: 1.6em 0 0.5em; }
+.sdt-fe-title {
+	margin: 0 0 0.4em;
+	font-size: 1.6em;
+	font-weight: 700;
+}
+html { scroll-behavior: smooth; }
+.sdt-fe-nav {
+	position: fixed;
+	top: 50%;
+	right: 16px;
+	transform: translateY(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 10px;
+	background: rgba(255,255,255,0.95);
+	border: 1px solid #e3e6ea;
+	border-radius: 10px;
+	box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+	z-index: 50;
+	max-width: 200px;
+	backdrop-filter: blur(4px);
+}
+.sdt-fe-nav a {
+	display: block;
+	padding: 6px 12px;
+	background: #fff;
+	border: 1px solid #d8dde3;
+	border-radius: 16px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #1e73be;
+	text-decoration: none;
+	white-space: nowrap;
+	text-align: left;
+}
+.sdt-fe-nav a:hover { background: #eaf3ff; }
+.sdt-fe [id] { scroll-margin-top: 20px; }
+
+@media (max-width: 980px) {
+	.sdt-fe-nav {
+		position: static;
+		transform: none;
+		max-width: none;
+		flex-direction: row;
+		flex-wrap: wrap;
+		margin-bottom: 1.2em;
+	}
+	.sdt-fe-nav a { display: inline-block; }
+}
+.sdt-fe h3 {
+	margin: 1.4em 0 0.5em;
+	font-size: 1.15em;
+	font-weight: 600;
+}
+.sdt-fe h4.sdt-fe-subhead {
+	margin: 1em 0 0.4em;
+	font-size: 0.95em;
+	font-weight: 600;
+	color: #555;
+}
+
+/* Section-Container für "Nächste Spiele" */
+.sdt-fe-section {
+	background: #fff;
+	border: 1px solid #e3e6ea;
+	border-radius: 8px;
+	padding: 14px 18px 18px;
+	margin-bottom: 1.4em;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.sdt-fe-section-next { border-top: 3px solid #1e73be; }
+.sdt-fe-section h3 { margin-top: 0; }
+
 .sdt-fe-table {
 	width: 100%;
 	border-collapse: collapse;
 	background: #fff;
 	font-size: 14px;
-	margin-bottom: 1em;
+	margin-bottom: 0.6em;
 }
 .sdt-fe-table th, .sdt-fe-table td {
-	padding: 8px 10px;
-	border-bottom: 1px solid #eee;
+	padding: 9px 10px;
+	border-bottom: 1px solid #eef0f3;
 	text-align: left;
+	vertical-align: middle;
 }
 .sdt-fe-table thead th {
-	background: #f4f7f1;
+	background: #f7f9fb;
 	font-weight: 600;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #555;
 }
-.sdt-fe-table .vs { color: #888; }
+.sdt-fe-table .vs { color: #999; font-style: italic; }
+.sdt-fe-queue tbody tr { color: #777; }
+.sdt-fe-queue tbody tr td .sdt-fe-badge { opacity: 0.75; }
+
+/* Badges für Bereich-Spalte */
+.sdt-fe-badge {
+	display: inline-block;
+	padding: 3px 9px;
+	border-radius: 11px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	background: #eef2f6;
+	color: #444;
+	border: 1px solid #dde3e9;
+}
+.sdt-fe-badge-group  { background: #eaf3ff; color: #15467a; border-color: #cfdfee; }
+.sdt-fe-badge-winner { background: #fff4cc; color: #7a5a00; border-color: #f0e0a3; }
+.sdt-fe-badge-loser  { background: #f5e4ec; color: #6c1a44; border-color: #e6c8d6; }
+.sdt-fe-badge-final  { background: #ffe3c2; color: #7a3e00; border-color: #f0c993; }
+
+/* Vorrunden-Tabellen */
 .sdt-fe-standings {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 	gap: 16px;
 }
-.sdt-fe-group h4 { margin: 0 0 6px; }
+.sdt-fe-group {
+	background: #fff;
+	border: 1px solid #e3e6ea;
+	border-radius: 6px;
+	padding: 10px 12px;
+}
+.sdt-fe-group h4 { margin: 0 0 8px; font-size: 0.95em; font-weight: 600; }
 .sdt-fe-table .sdt-q-1 { background: #fff4c8; font-weight: 700; }
 .sdt-fe-table .sdt-q-2 { background: #efefef; font-weight: 600; }
 .sdt-fe-empty { color: #888; font-style: italic; }
-.sdt-fe-queue tbody tr { color: #777; }
-.sdt-fe-queue tbody tr td:first-child { color: #222; }
 
+/* Bracket-Visualisierung */
 .sdt-fe-bracket {
 	display: flex;
 	gap: 20px;
 	overflow-x: auto;
-	padding: 10px;
-	background: #fafbfc;
-	border: 1px solid #e0e0e0;
-	border-radius: 4px;
+	padding: 12px;
+	background: #fbfcfd;
+	border: 1px solid #e3e6ea;
+	border-radius: 6px;
 	margin-bottom: 1em;
 }
 .sdt-fe-bracket-round {
@@ -49,31 +153,129 @@
 	flex-direction: column;
 	justify-content: space-around;
 	gap: 10px;
-	min-width: 180px;
+	min-width: 190px;
 }
 .sdt-fe-bracket-title {
 	font-size: 11px;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 1px;
-	color: #555;
+	color: #666;
 	text-align: center;
+	padding-bottom: 4px;
+	border-bottom: 1px solid #e3e6ea;
 }
 .sdt-fe-bracket-match {
 	background: #fff;
-	border: 1px solid #ddd;
-	border-radius: 3px;
-	padding: 4px 8px;
+	border: 1px solid #d8dde3;
+	border-radius: 4px;
+	padding: 4px 10px;
 	font-size: 13px;
+	box-shadow: 0 1px 1px rgba(0,0,0,0.03);
 }
-.sdt-fe-bracket-match > div { padding: 4px 0; }
-.sdt-fe-bracket-match > div + div { border-top: 1px solid #eee; }
+.sdt-fe-bracket-match > div { padding: 5px 0; }
+.sdt-fe-bracket-match > div + div { border-top: 1px solid #eef0f3; }
 .sdt-fe-bm-w { font-weight: 700; color: #2e7d32; }
 .sdt-fe-bm-w::before { content: '✓ '; }
 .sdt-fe-bracket-gold .sdt-fe-bm-w { color: #b8870b; }
+
+/* Hauptrunde / Trostrunde / Finale visuell unterscheiden */
+.sdt-fe-bracket-winner { border-left: 3px solid #d4a72c; }
+.sdt-fe-bracket-loser  { background: #fcf6f9; border-left: 3px solid #b04a78; }
+.sdt-fe-bracket-final  { background: #fffbe6; border-left: 3px solid #d4a72c; }
+
+/* End-Ergebnis */
 .sdt-fe-final {
-	background: #fff8d6;
+	background: linear-gradient(90deg, #fff4cc 0%, #fef0d4 100%);
 	border-left: 4px solid #d4a72c;
-	padding: 8px 12px;
-	margin: 0 0 12px;
+	padding: 10px 14px;
+	margin: 0 0 14px;
+	border-radius: 4px;
+	font-size: 1.05em;
+}
+
+/* Podium / Treppchen */
+.sdt-fe-podium-title {
+	margin: 2em 0 0.6em;
+	text-align: center;
+	font-size: 1.3em;
+}
+.sdt-fe-podiums {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+	gap: 30px;
+	margin-bottom: 2em;
+}
+.sdt-fe-podium {
+	background: #fff;
+	border: 1px solid #e3e6ea;
+	border-radius: 8px;
+	padding: 16px 12px 0;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.sdt-fe-podium-heading {
+	text-align: center;
+	font-weight: 700;
+	font-size: 1.05em;
+	margin-bottom: 14px;
+}
+.sdt-fe-podium-stage {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	align-items: end;
+	gap: 6px;
+	min-height: 220px;
+}
+.sdt-fe-podium-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+}
+.sdt-fe-podium-name {
+	font-weight: 600;
+	font-size: 0.92em;
+	text-align: center;
+	min-height: 2.6em;
+	display: flex;
+	align-items: flex-end;
+	line-height: 1.2;
+}
+.sdt-fe-podium-block {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px 6px 0 0;
+	color: #fff;
+	font-weight: 700;
+	box-shadow: inset 0 -6px 0 rgba(0,0,0,0.12);
+}
+.sdt-fe-podium-medal {
+	font-size: 1.6em;
+	line-height: 1;
+}
+.sdt-fe-podium-rank {
+	font-size: 1.8em;
+	line-height: 1;
+	margin-top: 2px;
+}
+.sdt-fe-podium-1 .sdt-fe-podium-block {
+	background: linear-gradient(180deg, #ffd966 0%, #d4a72c 100%);
+	height: 140px;
+}
+.sdt-fe-podium-2 .sdt-fe-podium-block {
+	background: linear-gradient(180deg, #d8d8d8 0%, #9a9a9a 100%);
+	height: 100px;
+}
+.sdt-fe-podium-3 .sdt-fe-podium-block {
+	background: linear-gradient(180deg, #d4956a 0%, #97623c 100%);
+	height: 70px;
+}
+
+@media (max-width: 720px) {
+	.sdt-fe-section { padding: 10px 12px 14px; }
+	.sdt-fe-table th, .sdt-fe-table td { padding: 7px 6px; font-size: 13px; }
+	.sdt-fe-bracket-round { min-width: 150px; }
 }

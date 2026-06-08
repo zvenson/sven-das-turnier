@@ -179,6 +179,17 @@ jQuery(function ($) {
 		});
 	});
 
+	// --- Brackets simulieren ---
+	$(document).on('click', '.sdt-simulate-brackets', function () {
+		if (!confirm('Alle restlichen Bracket-Spiele zufällig durchsimulieren?')) return;
+		var $btn = $(this).prop('disabled', true).text('Simuliere…');
+		post('sdt_simulate_brackets', { tournament_id: tid }).done(function () {
+			location.reload();
+		}).fail(function () {
+			$btn.prop('disabled', false).text('🎲 Brackets simulieren (Zufalls-Ergebnisse)');
+		});
+	});
+
 	// --- Brackets generieren ---
 	$(document).on('click', '.sdt-generate-brackets', function () {
 		var $btn = $(this).prop('disabled', true).text('Generiere…');

@@ -17,6 +17,7 @@ class SDT_Ajax {
 			'sdt_delete_all_players',
 			'sdt_import_registration',
 			'sdt_simulate_groups',
+			'sdt_simulate_brackets',
 			'sdt_generate_brackets',
 			'sdt_reset_brackets',
 		);
@@ -100,7 +101,12 @@ class SDT_Ajax {
 	public static function sdt_reset_match() {
 		self::check();
 		$mid = (int) ( $_POST['match_id'] ?? 0 );
+		$m   = SDT_DB::get_match( $mid );
 		SDT_DB::set_winner( $mid, 0 );
+		// Bei Bracket-Matches: Downstream-Slots leeren und Bye-Auflösung neu rechnen
+		if ( $m && $m->phase !== 'group' ) {
+			SDT_Scheduler::reset_bracket_cascade( $mid );
+		}
 		wp_send_json_success();
 	}
 
@@ -158,6 +164,13 @@ class SDT_Ajax {
 		if ( SDT_Scheduler::is_group_phase_done( $tid ) && ! SDT_Scheduler::has_bracket_matches( $tid ) ) {
 			SDT_Scheduler::generate_brackets( $tid );
 		}
+		wp_send_json_success();
+	}
+
+	public static function sdt_simulate_brackets() {
+		self::check();
+		$tid = (int) ( $_POST['tournament_id'] ?? 0 );
+		SDT_Scheduler::simulate_bracket_phase( $tid );
 		wp_send_json_success();
 	}
 

@@ -296,14 +296,19 @@ class SDT_Admin {
 	}
 
 	private static function render_running( $t ) {
-		$matches    = SDT_DB::get_matches( $t->id );
+		$matches      = SDT_DB::get_matches( $t->id );
 		$group_matches = array_filter( $matches, function ( $m ) { return $m->phase === 'group'; } );
-		$next       = SDT_Scheduler::next_matches( $t->id, $t->tables_count );
-		$queue_size = max( 0, 6 - count( $next ) );
-		$queue      = SDT_Scheduler::upcoming_after( $t->id, array_map( function ( $m ) { return (int) $m->id; }, $next ), $queue_size );
-		$standings  = SDT_Scheduler::standings( $t->id );
-		$group_done = SDT_Scheduler::is_group_phase_done( $t->id );
+		$group_done   = SDT_Scheduler::is_group_phase_done( $t->id );
 		$has_brackets = SDT_Scheduler::has_bracket_matches( $t->id );
+		if ( $has_brackets ) {
+			$next  = SDT_Scheduler::next_bracket_matches( $t->id, $t->tables_count );
+			$queue = SDT_Scheduler::upcoming_bracket_after( $t->id, array_map( function ( $m ) { return (int) $m->id; }, $next ), 999 );
+		} else {
+			$next       = SDT_Scheduler::next_matches( $t->id, $t->tables_count );
+			$queue_size = max( 0, 6 - count( $next ) );
+			$queue      = SDT_Scheduler::upcoming_after( $t->id, array_map( function ( $m ) { return (int) $m->id; }, $next ), $queue_size );
+		}
+		$standings = SDT_Scheduler::standings( $t->id );
 		$players   = array();
 		foreach ( SDT_DB::get_players( $t->id ) as $p ) {
 			$players[ $p->id ] = $p->name;
@@ -311,7 +316,21 @@ class SDT_Admin {
 
 		$done    = count( array_filter( $group_matches, function ( $m ) { return $m->status === 'done'; } ) );
 		$total   = count( $group_matches );
+		$has_gold        = (bool) array_filter( $matches, function ( $m ) { return $m->phase === 'gold'; } );
+		$has_silber      = (bool) array_filter( $matches, function ( $m ) { return $m->phase === 'silber'; } );
+		$has_gold_trost  = (bool) array_filter( $matches, function ( $m ) { return $m->phase === 'gold'   && ( $m->bracket_side ?: 'winner' ) === 'loser'; } );
+		$has_silber_trost = (bool) array_filter( $matches, function ( $m ) { return $m->phase === 'silber' && ( $m->bracket_side ?: 'winner' ) === 'loser'; } );
 		?>
+
+		<nav class="sdt-admin-nav">
+			<?php if ( ! empty( $next ) ) : ?><a href="#sdt-a-next">⏭ Nächste Spiele</a><?php endif; ?>
+			<?php if ( $has_gold ) : ?><a href="#sdt-a-gold-winner">🏆 Goldrunde</a><?php endif; ?>
+			<?php if ( $has_gold_trost ) : ?><a href="#sdt-a-gold-loser">🥉 Trostrunde Gold</a><?php endif; ?>
+			<?php if ( $has_silber ) : ?><a href="#sdt-a-silber-winner">🥈 Silberrunde</a><?php endif; ?>
+			<?php if ( $has_silber_trost ) : ?><a href="#sdt-a-silber-loser">🥉 Trostrunde Silber</a><?php endif; ?>
+			<a href="#sdt-a-vorrunden">📋 Vorrunden</a>
+			<a href="#sdt-a-alle">📜 Alle Vorrunden-Spiele</a>
+		</nav>
 
 		<div class="sdt-testtools">
 			<strong>Test-Tools:</strong>
@@ -319,6 +338,7 @@ class SDT_Admin {
 				<button type="button" class="button sdt-simulate-groups">🎲 Vorrunde simulieren (Zufalls-Ergebnisse)</button>
 			<?php endif; ?>
 			<?php if ( $has_brackets ) : ?>
+				<button type="button" class="button sdt-simulate-brackets">🎲 Brackets simulieren (Zufalls-Ergebnisse)</button>
 				<button type="button" class="button sdt-reset-brackets">Brackets zurücksetzen</button>
 			<?php endif; ?>
 		</div>
@@ -330,18 +350,24 @@ class SDT_Admin {
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! $group_done ) : ?>
-		<h2>Nächste Spiele (<?php echo count( $next ); ?>/<?php echo (int) $t->tables_count; ?> Tische)</h2>
+		<h2 id="sdt-a-next">Nächste Spiele (<?php echo count( $next ); ?>/<?php echo (int) $t->tables_count; ?> Tische)</h2>
 		<?php if ( empty( $next ) ) : ?>
-			<p><?php echo $done === $total ? '<strong>Alle Spiele abgeschlossen!</strong>' : 'Keine spielbaren Matches.'; ?></p>
+			<p>
+				<?php
+				if ( $has_brackets ) {
+					echo 'Keine spielbaren Bracket-Matches — alles wartet auf vorausgehende Spiele oder ist abgeschlossen.';
+				} else {
+					echo $done === $total ? '<strong>Alle Vorrunden-Spiele abgeschlossen!</strong>' : 'Keine spielbaren Matches.';
+				}
+				?>
+			</p>
 		<?php else : ?>
 			<table class="wp-list-table widefat striped sdt-next">
-				<thead><tr><th>Gruppe</th><th>Runde</th><th>Spieler 1</th><th></th><th>Spieler 2</th><th>Aktion</th></tr></thead>
+				<thead><tr><th>Bereich</th><th>Spieler 1</th><th></th><th>Spieler 2</th><th>Aktion</th></tr></thead>
 				<tbody>
 				<?php foreach ( $next as $m ) : ?>
 					<tr data-mid="<?php echo (int) $m->id; ?>">
-						<td><strong><?php echo esc_html( $m->group_label ); ?></strong></td>
-						<td><?php echo (int) $m->round; ?></td>
+						<td><strong><?php echo esc_html( SDT_Scheduler::match_label( $m, $matches ) ); ?></strong></td>
 						<td><?php echo esc_html( $players[ $m->player1_id ] ?? '?' ); ?></td>
 						<td>vs.</td>
 						<td><?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></td>
@@ -358,12 +384,11 @@ class SDT_Admin {
 		<?php if ( ! empty( $queue ) ) : ?>
 			<h3>Danach in der Warteschlange</h3>
 			<table class="wp-list-table widefat striped sdt-queue">
-				<thead><tr><th>Gruppe</th><th>Runde</th><th>Spieler 1</th><th></th><th>Spieler 2</th></tr></thead>
+				<thead><tr><th>Bereich</th><th>Spieler 1</th><th></th><th>Spieler 2</th></tr></thead>
 				<tbody>
 				<?php foreach ( $queue as $m ) : ?>
 					<tr>
-						<td><strong><?php echo esc_html( $m->group_label ); ?></strong></td>
-						<td><?php echo (int) $m->round; ?></td>
+						<td><strong><?php echo esc_html( SDT_Scheduler::match_label( $m, $matches ) ); ?></strong></td>
 						<td><?php echo esc_html( $players[ $m->player1_id ] ?? '?' ); ?></td>
 						<td>vs.</td>
 						<td><?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></td>
@@ -372,11 +397,10 @@ class SDT_Admin {
 				</tbody>
 			</table>
 		<?php endif; ?>
-		<?php endif; /* group_done */ ?>
 
 		<?php if ( $has_brackets ) : self::render_brackets( $t, $matches, $players ); endif; ?>
 
-		<h2>Vorrunden-Tabellen <span class="description">(<?php echo (int) $done; ?>/<?php echo (int) $total; ?> Spiele abgeschlossen)</span></h2>
+		<h2 id="sdt-a-vorrunden">Vorrunden-Tabellen <span class="description">(<?php echo (int) $done; ?>/<?php echo (int) $total; ?> Spiele abgeschlossen)</span></h2>
 		<div class="sdt-standings">
 			<?php foreach ( $standings as $label => $rows ) : ?>
 				<div class="sdt-standing-group">
@@ -404,7 +428,7 @@ class SDT_Admin {
 			<?php endforeach; ?>
 		</div>
 
-		<h2 style="margin-top:30px;">Alle Vorrunden-Spiele</h2>
+		<h2 id="sdt-a-alle" style="margin-top:30px;">Alle Vorrunden-Spiele</h2>
 		<table class="wp-list-table widefat striped sdt-all">
 			<thead><tr><th>Gruppe</th><th>Runde</th><th>Begegnung</th><th>Ergebnis</th><th>Aktion</th></tr></thead>
 			<tbody>
@@ -448,75 +472,138 @@ class SDT_Admin {
 	}
 
 	private static function render_brackets( $t, $matches, $players ) {
-		$brackets = array( 'gold' => array(), 'silber' => array() );
+		// Gruppieren nach phase und bracket_side
+		$brackets = array(
+			'gold'   => array( 'winner' => array(), 'loser' => array(), 'final' => null ),
+			'silber' => array( 'winner' => array(), 'loser' => array(), 'final' => null ),
+		);
 		foreach ( $matches as $m ) {
-			if ( $m->phase === 'gold' || $m->phase === 'silber' ) {
-				$brackets[ $m->phase ][ (int) $m->bracket_round ][ (int) $m->bracket_position ] = $m;
+			if ( $m->phase !== 'gold' && $m->phase !== 'silber' ) continue;
+			$side = $m->bracket_side ?: 'winner'; // Fallback für Alt-Daten
+			if ( $side === 'final' ) {
+				$brackets[ $m->phase ]['final'] = $m;
+			} else {
+				$brackets[ $m->phase ][ $side ][ (int) $m->bracket_round ][ (int) $m->bracket_position ] = $m;
 			}
 		}
 
 		$labels = array(
-			'gold'   => array( 'title' => '🏆 Goldrunde (Plätze 1 + 2)', 'class' => 'sdt-bracket-gold' ),
-			'silber' => array( 'title' => '🥈 Silberrunde (ab Platz 3)', 'class' => 'sdt-bracket-silber' ),
+			'gold'   => '🏆 Goldrunde (Plätze 1 + 2)',
+			'silber' => '🥈 Silberrunde (ab Platz 3)',
 		);
 
-		foreach ( $brackets as $phase => $rounds_data ) {
-			if ( empty( $rounds_data ) ) continue;
-			ksort( $rounds_data );
-			$rounds_count = count( $rounds_data );
-			$last_round   = max( array_keys( $rounds_data ) );
-			$final_match  = $rounds_data[ $last_round ][0] ?? null;
+		foreach ( $brackets as $phase => $data ) {
+			if ( empty( $data['winner'] ) ) continue;
 			?>
-			<h2 style="margin-top:30px;"><?php echo esc_html( $labels[ $phase ]['title'] ); ?></h2>
-			<?php if ( $final_match && $final_match->status === 'done' && $final_match->winner_id ) :
-				$winner_name = $players[ $final_match->winner_id ] ?? '?';
-				$loser_id    = (int) $final_match->winner_id === (int) $final_match->player1_id ? $final_match->player2_id : $final_match->player1_id;
-				$loser_name  = $players[ $loser_id ] ?? '?';
-			?>
-				<div class="sdt-final-result sdt-final-<?php echo esc_attr( $phase ); ?>">
-					<strong><?php echo $phase === 'gold' ? '🥇 Sieger Goldrunde' : '🥇 Sieger Silberrunde'; ?>:</strong>
-					<?php echo esc_html( $winner_name ); ?>
-					&nbsp;·&nbsp;
-					<strong>2.</strong> <?php echo esc_html( $loser_name ); ?>
-				</div>
-			<?php endif; ?>
-			<div class="sdt-bracket <?php echo esc_attr( $labels[ $phase ]['class'] ); ?>">
-				<?php foreach ( $rounds_data as $round_num => $matches_in_round ) :
-					ksort( $matches_in_round );
-					$round_title = $round_num === $rounds_count ? 'Finale' : ( $round_num === $rounds_count - 1 ? 'Halbfinale' : 'Runde ' . $round_num );
-					?>
-					<div class="sdt-bracket-round">
-						<div class="sdt-bracket-round-title"><?php echo esc_html( $round_title ); ?></div>
-						<?php foreach ( $matches_in_round as $m ) :
-							$p1     = $players[ $m->player1_id ] ?? '';
-							$p2     = $players[ $m->player2_id ] ?? '';
-							$ready  = $m->status === 'pending' && (int) $m->player1_id > 0 && (int) $m->player2_id > 0;
-							$done   = $m->status === 'done' && $m->winner_id;
-							$cls    = $done ? 'done' : ( $ready ? 'ready' : 'waiting' );
-							?>
-							<div class="sdt-bracket-match sdt-bm-<?php echo esc_attr( $cls ); ?>" data-mid="<?php echo (int) $m->id; ?>">
-								<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === (int) $m->player1_id ) ? 'sdt-bm-winner' : ''; ?>">
-									<span class="sdt-bm-name"><?php echo esc_html( $p1 ?: '–' ); ?></span>
-									<?php if ( $ready ) : ?>
-										<button class="button button-small sdt-win" data-winner="<?php echo (int) $m->player1_id; ?>">Sieg</button>
-									<?php endif; ?>
-								</div>
-								<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === (int) $m->player2_id ) ? 'sdt-bm-winner' : ''; ?>">
-									<span class="sdt-bm-name"><?php echo esc_html( $p2 ?: '–' ); ?></span>
-									<?php if ( $ready ) : ?>
-										<button class="button button-small sdt-win" data-winner="<?php echo (int) $m->player2_id; ?>">Sieg</button>
-									<?php endif; ?>
-								</div>
-								<?php if ( $done ) : ?>
-									<button class="button button-small sdt-reset sdt-bm-reset">↻</button>
-								<?php endif; ?>
-							</div>
-						<?php endforeach; ?>
-					</div>
-				<?php endforeach; ?>
-			</div>
+			<h2 id="sdt-a-<?php echo esc_attr( $phase ); ?>" style="margin-top:30px;"><?php echo esc_html( $labels[ $phase ] ); ?></h2>
 			<?php
+			self::render_final_summary( $phase, $data, $players );
+			self::render_subbracket( $data['winner'], 'winner', $phase, true, $players );
+			if ( ! empty( $data['loser'] ) ) {
+				self::render_subbracket( $data['loser'], 'loser', $phase, false, $players );
+			}
+			if ( $data['final'] ) {
+				self::render_grand_final( $data['final'], $phase, $players );
+			}
 		}
+	}
+
+	private static function render_final_summary( $phase, $data, $players ) {
+		$grand = $data['final'];
+		// Fallback für Alt-Daten ohne bracket_side: letztes Winner-Bracket-Match als Finale
+		if ( ! $grand && ! empty( $data['winner'] ) ) {
+			$last_w = max( array_keys( $data['winner'] ) );
+			$grand  = $data['winner'][ $last_w ][0] ?? null;
+		}
+		if ( ! $grand || $grand->status !== 'done' || ! $grand->winner_id ) return;
+		$first  = $players[ $grand->winner_id ] ?? '?';
+		$second_id = (int) $grand->winner_id === (int) $grand->player1_id ? $grand->player2_id : $grand->player1_id;
+		$second = $players[ $second_id ] ?? '?';
+		// Platz 3 = Sieger des letzten Trostrunden-Matches (Spiel um Platz 3)
+		$third = '';
+		if ( ! empty( $data['loser'] ) ) {
+			$last_round_num = max( array_keys( $data['loser'] ) );
+			$l_final = $data['loser'][ $last_round_num ][0] ?? null;
+			if ( $l_final && $l_final->status === 'done' && $l_final->winner_id ) {
+				$third = $players[ (int) $l_final->winner_id ] ?? '';
+			}
+		}
+		?>
+		<div class="sdt-final-result sdt-final-<?php echo esc_attr( $phase ); ?>">
+			<strong>🥇 1.</strong> <?php echo esc_html( $first ); ?>
+			&nbsp;·&nbsp;<strong>🥈 2.</strong> <?php echo esc_html( $second ); ?>
+			<?php if ( $third ) : ?>&nbsp;·&nbsp;<strong>🥉 3.</strong> <?php echo esc_html( $third ); endif; ?>
+		</div>
+		<?php
+	}
+
+	private static function render_subbracket( $rounds_data, $side, $phase, $is_winner, $players ) {
+		ksort( $rounds_data );
+		$rounds_count = count( $rounds_data );
+		$title_top    = $is_winner ? 'Hauptrunde' : 'Trostrunde';
+		$cls_extra    = $is_winner ? 'sdt-bracket-winner' : 'sdt-bracket-loser';
+		$anchor       = 'sdt-a-' . $phase . '-' . ( $is_winner ? 'winner' : 'loser' );
+		?>
+		<h3 id="<?php echo esc_attr( $anchor ); ?>" style="margin-top:18px;"><?php echo esc_html( $title_top ); ?></h3>
+		<div class="sdt-bracket sdt-bracket-<?php echo esc_attr( $phase ); ?> <?php echo esc_attr( $cls_extra ); ?>">
+			<?php foreach ( $rounds_data as $round_num => $matches_in_round ) :
+				ksort( $matches_in_round );
+				if ( $is_winner ) {
+					$round_title = $round_num === $rounds_count ? 'Hauptrunden-Finale (Plätze 1 + 2)' : ( $round_num === $rounds_count - 1 ? 'Halbfinale' : 'Runde ' . $round_num );
+				} else {
+					$round_title = $round_num === $rounds_count ? 'Spiel um Platz 3' : 'Trostrunde ' . $round_num;
+				}
+				?>
+				<div class="sdt-bracket-round">
+					<div class="sdt-bracket-round-title"><?php echo esc_html( $round_title ); ?></div>
+					<?php foreach ( $matches_in_round as $m ) {
+						self::render_bracket_match( $m, $players );
+					} ?>
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	private static function render_grand_final( $m, $phase, $players ) {
+		?>
+		<h3 style="margin-top:18px;">Finale</h3>
+		<div class="sdt-bracket sdt-bracket-<?php echo esc_attr( $phase ); ?> sdt-bracket-final">
+			<div class="sdt-bracket-round">
+				<div class="sdt-bracket-round-title">Finale (endgültig)</div>
+				<?php self::render_bracket_match( $m, $players ); ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	private static function render_bracket_match( $m, $players ) {
+		$p1_id = (int) $m->player1_id;
+		$p2_id = (int) $m->player2_id;
+		$ready = $m->status === 'pending' && $p1_id > 0 && $p2_id > 0;
+		$done  = $m->status === 'done' && $m->winner_id;
+		$cls   = $done ? 'done' : ( $ready ? 'ready' : 'waiting' );
+		$p1    = $p1_id ? ( $players[ $p1_id ] ?? '' ) : '';
+		$p2    = $p2_id ? ( $players[ $p2_id ] ?? '' ) : '';
+		?>
+		<div class="sdt-bracket-match sdt-bm-<?php echo esc_attr( $cls ); ?>" data-mid="<?php echo (int) $m->id; ?>">
+			<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === $p1_id ) ? 'sdt-bm-winner' : ''; ?>">
+				<span class="sdt-bm-name"><?php echo esc_html( $p1 ?: '–' ); ?></span>
+				<?php if ( $ready ) : ?>
+					<button class="button button-small sdt-win" data-winner="<?php echo $p1_id; ?>">Sieg</button>
+				<?php endif; ?>
+			</div>
+			<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === $p2_id ) ? 'sdt-bm-winner' : ''; ?>">
+				<span class="sdt-bm-name"><?php echo esc_html( $p2 ?: '–' ); ?></span>
+				<?php if ( $ready ) : ?>
+					<button class="button button-small sdt-win" data-winner="<?php echo $p2_id; ?>">Sieg</button>
+				<?php endif; ?>
+			</div>
+			<?php if ( $done ) : ?>
+				<button class="button button-small sdt-reset sdt-bm-reset">↻</button>
+			<?php endif; ?>
+		</div>
+		<?php
 	}
 
 	private static function export_json( $tid ) {

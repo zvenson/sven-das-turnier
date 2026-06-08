@@ -112,8 +112,37 @@
 .sdt-bm-waiting { opacity: 0.6; }
 .sdt-bm-ready { border-color: #1e73be; box-shadow: 0 0 0 1px #1e73be; }
 .sdt-bm-reset { position: absolute; top: 4px; right: 4px; }
+.sdt-admin-nav {
+	position: sticky;
+	top: 32px;
+	z-index: 100;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 8px 10px;
+	margin: 0 0 14px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+.sdt-admin-nav a {
+	display: inline-block;
+	padding: 4px 10px;
+	background: #f0f0f1;
+	border-radius: 12px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #1d2327;
+	text-decoration: none;
+}
+.sdt-admin-nav a:hover { background: #dcdcde; }
+html { scroll-behavior: smooth; }
+[id^="sdt-a-"] { scroll-margin-top: 80px; }
+
 .sdt-bracket-gold .sdt-bm-winner { background: #fff8d6; }
 .sdt-bracket-silber .sdt-bm-winner { background: #ececec; }
+.sdt-bracket-loser { background: #fafafa; border-left: 3px solid #b48; padding-left: 8px; }
+.sdt-bracket-final { background: #fffbe6; border-left: 3px solid #d4a72c; padding-left: 8px; }
 
 .sdt-final-result {
 	background: #fff8d6;

@@ -51,8 +51,11 @@ class SDT_DB {
 			phase VARCHAR(20) NOT NULL DEFAULT 'group',
 			bracket_round TINYINT UNSIGNED NULL,
 			bracket_position SMALLINT UNSIGNED NULL,
+			bracket_side VARCHAR(10) NULL,
 			feeds_match_id BIGINT UNSIGNED NULL,
 			feeds_slot TINYINT UNSIGNED NULL,
+			loser_feeds_match_id BIGINT UNSIGNED NULL,
+			loser_feeds_slot TINYINT UNSIGNED NULL,
 			PRIMARY KEY  (id),
 			KEY tournament_id (tournament_id),
 			KEY group_label (tournament_id, group_label),
@@ -184,20 +187,23 @@ class SDT_DB {
 	public static function insert_match( $data ) {
 		global $wpdb;
 		$types = array(
-			'tournament_id'    => '%d',
-			'group_label'      => '%s',
-			'round'            => '%d',
-			'position'         => '%d',
-			'player1_id'       => '%d',
-			'player2_id'       => '%d',
-			'winner_id'        => '%d',
-			'status'           => '%s',
-			'finished_at'      => '%s',
-			'phase'            => '%s',
-			'bracket_round'    => '%d',
-			'bracket_position' => '%d',
-			'feeds_match_id'   => '%d',
-			'feeds_slot'       => '%d',
+			'tournament_id'        => '%d',
+			'group_label'          => '%s',
+			'round'                => '%d',
+			'position'             => '%d',
+			'player1_id'           => '%d',
+			'player2_id'           => '%d',
+			'winner_id'            => '%d',
+			'status'               => '%s',
+			'finished_at'          => '%s',
+			'phase'                => '%s',
+			'bracket_round'        => '%d',
+			'bracket_position'     => '%d',
+			'bracket_side'         => '%s',
+			'feeds_match_id'       => '%d',
+			'feeds_slot'           => '%d',
+			'loser_feeds_match_id' => '%d',
+			'loser_feeds_slot'     => '%d',
 		);
 		$format = array();
 		foreach ( array_keys( $data ) as $k ) {
@@ -218,9 +224,24 @@ class SDT_DB {
 		);
 	}
 
+	public static function set_match_loser_feeds( $match_id, $target_match_id, $slot ) {
+		global $wpdb;
+		return $wpdb->update(
+			self::t_matches(),
+			array( 'loser_feeds_match_id' => (int) $target_match_id, 'loser_feeds_slot' => (int) $slot ),
+			array( 'id' => (int) $match_id ),
+			array( '%d', '%d' ),
+			array( '%d' )
+		);
+	}
+
 	public static function set_match_player( $match_id, $slot, $player_id ) {
 		global $wpdb;
 		$col = ( (int) $slot === 1 ) ? 'player1_id' : 'player2_id';
+		// Schutz: ein bereits als 'done' markiertes Match (insb. totes Match) nicht mehr verändern.
+		$current = self::get_match( (int) $match_id );
+		if ( ! $current ) return false;
+		if ( $current->status === 'done' ) return false;
 		return $wpdb->update(
 			self::t_matches(),
 			array( $col => (int) $player_id ),
