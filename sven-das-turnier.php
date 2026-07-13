@@ -1,9 +1,11 @@
 <?php
 /**
  * Plugin Name: Sven Das Turnier
+ * Plugin URI:  https://webdesignhamburg.net/
  * Description: Turniersoftware mit Gruppen, Round-Robin, KO-Runden, Tennis-Modus und Live-Tabellen.
- * Version:     2.0.0
- * Author:      Sven
+ * Version:     2.0.1
+ * Author:      Sven Trogus
+ * Author URI:  https://webdesignhamburg.net/
  * Text Domain: sven-das-turnier
  */
 
@@ -11,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SDT_VERSION', '2.0.0' );
+define( 'SDT_VERSION', '2.0.1' );
 define( 'SDT_FILE', __FILE__ );
 define( 'SDT_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SDT_URL', plugin_dir_url( __FILE__ ) );

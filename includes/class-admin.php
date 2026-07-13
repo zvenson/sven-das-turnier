@@ -14,6 +14,15 @@ class SDT_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_post' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
+		add_filter( 'admin_footer_text', array( __CLASS__, 'footer_text' ) );
+	}
+
+	/** Ersetzt den Admin-Footer auf den Plugin-Seiten durch eine Credit-Zeile */
+	public static function footer_text( $text ) {
+		if ( isset( $_GET['page'] ) && $_GET['page'] === self::PAGE ) {
+			return 'Sven Das Turnier — Turniersoftware von <a href="https://webdesignhamburg.net/" target="_blank" rel="noopener">webdesignhamburg.net</a>';
+		}
+		return $text;
 	}
 
 	public static function menu() {

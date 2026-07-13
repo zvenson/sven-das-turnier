@@ -24,7 +24,7 @@ class SDT_Frontend {
 			: SDT_DB::latest_active_tournament();
 
 		if ( ! $t ) {
-			return '<p class="sdt-fe-empty">Aktuell läuft kein Turnier.</p>';
+			return '<p class="sdt-fe-empty">Aktuell läuft kein Turnier.</p>' . self::credit();
 		}
 
 		$matches       = SDT_DB::get_matches( $t->id );
@@ -134,9 +134,16 @@ class SDT_Frontend {
 			<?php endforeach; ?>
 			</div>
 
+			<?php echo self::credit(); ?>
 		</div>
 		<?php
 		return ob_get_clean();
+	}
+
+	/** Dezente Credit-Zeile unter der Live-Seite; per Filter sdt_credit anpass- oder abschaltbar */
+	private static function credit() {
+		$html = '<p class="sdt-fe-credit">Turniersoftware: <a href="https://webdesignhamburg.net/" target="_blank" rel="noopener">webdesignhamburg.net</a></p>';
+		return apply_filters( 'sdt_credit', $html );
 	}
 
 	private static function render_podiums( $matches, $players ) {
