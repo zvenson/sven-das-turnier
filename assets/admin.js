@@ -124,6 +124,128 @@ jQuery(function ($) {
 		});
 	});
 
+	// --- Tennis: Ergebnis-Dialog ---
+	var bestOf = parseInt($wrap.data('bestof'), 10) || 3;
+
+	function closeResultModal() {
+		$('.sdt-modal-overlay').remove();
+		$(document).off('keydown.sdtmodal');
+	}
+
+	function openResultModal(mid, p1id, p1name, p2id, p2name) {
+		closeResultModal();
+
+		var $overlay = $('<div class="sdt-modal-overlay">');
+		var $modal   = $('<div class="sdt-modal">');
+		$modal.append($('<h2>').text(p1name + ' vs. ' + p2name));
+
+		// Satz-Eingaben
+		var $sets = $('<div class="sdt-modal-sets">');
+		var $head = $('<div class="sdt-modal-setrow sdt-modal-sethead">')
+			.append('<span></span>')
+			.append($('<span class="sdt-modal-pname">').text(p1name))
+			.append('<span></span>')
+			.append($('<span class="sdt-modal-pname">').text(p2name));
+		$sets.append($head);
+		for (var i = 1; i <= bestOf; i++) {
+			var $row = $('<div class="sdt-modal-setrow">')
+				.append($('<label>').text('Satz ' + i))
+				.append('<input type="number" min="0" max="99" class="sdt-set-p1" inputmode="numeric">')
+				.append('<span class="sdt-modal-colon">:</span>')
+				.append('<input type="number" min="0" max="99" class="sdt-set-p2" inputmode="numeric">');
+			$sets.append($row);
+		}
+		$modal.append($sets);
+
+		// Walkover
+		var $wo = $('<div class="sdt-modal-wo">');
+		$wo.append('<label class="sdt-wo-toggle"><input type="checkbox" class="sdt-wo-check"> Nicht angetreten (w.o.)</label>');
+		var $woWinner = $('<div class="sdt-wo-winner" style="display:none;">')
+			.append('<p>Wer gewinnt kampflos?</p>')
+			.append($('<label>').append('<input type="radio" name="sdt-wo-w" value="' + p1id + '"> ').append(document.createTextNode(p1name)))
+			.append($('<label>').append('<input type="radio" name="sdt-wo-w" value="' + p2id + '"> ').append(document.createTextNode(p2name)));
+		$wo.append($woWinner);
+		$modal.append($wo);
+
+		var $err = $('<div class="sdt-modal-error" style="display:none;">');
+		$modal.append($err);
+
+		var $btns = $('<div class="sdt-modal-buttons">')
+			.append('<button type="button" class="button button-primary sdt-modal-save">Speichern</button> ')
+			.append('<button type="button" class="button sdt-modal-cancel">Abbrechen</button>');
+		$modal.append($btns);
+
+		$overlay.append($modal).appendTo('body');
+		$sets.find('.sdt-set-p1').first().trigger('focus');
+
+		$overlay.on('change', '.sdt-wo-check', function () {
+			var wo = this.checked;
+			$sets.toggle(!wo);
+			$woWinner.toggle(wo);
+		});
+
+		$overlay.on('click', function (e) {
+			if (e.target === $overlay[0]) closeResultModal();
+		});
+		$overlay.on('click', '.sdt-modal-cancel', closeResultModal);
+		$(document).on('keydown.sdtmodal', function (e) {
+			if (e.key === 'Escape') closeResultModal();
+		});
+
+		$overlay.on('click', '.sdt-modal-save', function () {
+			var $btn = $(this);
+			var wo   = $overlay.find('.sdt-wo-check').is(':checked');
+			var data = { match_id: mid, walkover: wo ? 1 : 0 };
+
+			if (wo) {
+				var wid = $overlay.find('input[name="sdt-wo-w"]:checked').val();
+				if (!wid) {
+					$err.text('Bitte auswählen, wer kampflos gewinnt.').show();
+					return;
+				}
+				data.winner_id = wid;
+			} else {
+				var sets = [];
+				var bad  = false;
+				$sets.find('.sdt-modal-setrow').not('.sdt-modal-sethead').each(function () {
+					var a = $(this).find('.sdt-set-p1').val();
+					var b = $(this).find('.sdt-set-p2').val();
+					if (a === '' && b === '') return; // leerer Satz = ignorieren
+					if (a === '' || b === '') { bad = true; return; }
+					sets.push([parseInt(a, 10), parseInt(b, 10)]);
+				});
+				if (bad) {
+					$err.text('Ein Satz ist nur halb ausgefüllt.').show();
+					return;
+				}
+				if (!sets.length) {
+					$err.text('Bitte mindestens einen Satz eintragen.').show();
+					return;
+				}
+				data.sets = JSON.stringify(sets);
+			}
+
+			$btn.prop('disabled', true);
+			post('sdt_set_result', data).done(function (res) {
+				if (res && res.success) {
+					location.reload();
+				} else {
+					$btn.prop('disabled', false);
+					$err.text(res && res.data && res.data.message ? res.data.message : 'Fehler beim Speichern.').show();
+				}
+			}).fail(function () {
+				$btn.prop('disabled', false);
+				$err.text('Fehler beim Speichern.').show();
+			});
+		});
+	}
+
+	$(document).on('click', '.sdt-result', function () {
+		var $btn = $(this);
+		var mid  = $btn.data('mid') || $btn.closest('[data-mid]').data('mid');
+		openResultModal(mid, $btn.data('p1'), String($btn.data('p1name')), $btn.data('p2'), String($btn.data('p2name')));
+	});
+
 	// --- Sieg eintragen ---
 	$(document).on('click', '.sdt-win', function () {
 		var $btn = $(this);

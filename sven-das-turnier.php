@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Sven Das Turnier
- * Description: Tischtennis-Turniersoftware mit Gruppen, Round-Robin und Live-Tabellen.
- * Version:     1.2.5
+ * Description: Turniersoftware mit Gruppen, Round-Robin, KO-Runden, Tennis-Modus und Live-Tabellen.
+ * Version:     2.0.0
  * Author:      Sven
  * Text Domain: sven-das-turnier
  */
@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SDT_VERSION', '1.2.5' );
+define( 'SDT_VERSION', '2.0.0' );
 define( 'SDT_FILE', __FILE__ );
 define( 'SDT_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SDT_URL', plugin_dir_url( __FILE__ ) );

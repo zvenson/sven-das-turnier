@@ -12,6 +12,7 @@ class SDT_Ajax {
 			'sdt_assign_player',
 			'sdt_generate_plan',
 			'sdt_set_winner',
+			'sdt_set_result',
 			'sdt_reset_match',
 			'sdt_demo_players',
 			'sdt_delete_all_players',
@@ -77,25 +78,96 @@ class SDT_Ajax {
 		$winner_id = (int) ( $_POST['winner_id'] ?? 0 );
 		SDT_DB::set_winner( $mid, $winner_id );
 		SDT_Scheduler::advance_winner( $mid );
-
-		// Status nachziehen
-		$m = SDT_DB::get_match( $mid );
-		if ( $m ) {
-			$all      = SDT_DB::get_matches( $m->tournament_id );
-			$all_done = ! empty( $all );
-			foreach ( $all as $x ) {
-				if ( $x->status !== 'done' ) { $all_done = false; break; }
-			}
-			if ( $all_done ) {
-				SDT_DB::update_tournament( $m->tournament_id, array( 'status' => 'finished' ) );
-			} else {
-				$t = SDT_DB::get_tournament( $m->tournament_id );
-				if ( $t && $t->status === 'finished' ) {
-					SDT_DB::update_tournament( $m->tournament_id, array( 'status' => 'running' ) );
-				}
-			}
-		}
+		self::sync_tournament_status( $mid );
 		wp_send_json_success();
+	}
+
+	/**
+	 * Tennis-Ergebnis: Satz-Scores oder Walkover (w.o.).
+	 * POST: match_id, walkover (0/1), winner_id (nur bei w.o.), sets (JSON: [[6,4],[3,6],[7,5]])
+	 */
+	public static function sdt_set_result() {
+		self::check();
+		$mid      = (int) ( $_POST['match_id'] ?? 0 );
+		$walkover = (int) ( $_POST['walkover'] ?? 0 );
+		$m        = SDT_DB::get_match( $mid );
+		if ( ! $m ) {
+			wp_send_json_error( array( 'message' => 'Match nicht gefunden' ) );
+		}
+		$t  = SDT_DB::get_tournament( $m->tournament_id );
+		$p1 = (int) $m->player1_id;
+		$p2 = (int) $m->player2_id;
+
+		if ( $walkover ) {
+			$winner_id = (int) ( $_POST['winner_id'] ?? 0 );
+			if ( $winner_id !== $p1 && $winner_id !== $p2 ) {
+				wp_send_json_error( array( 'message' => 'Ungültiger Sieger' ) );
+			}
+			SDT_DB::set_result( $mid, $winner_id, null, 1 );
+		} else {
+			$best_of = $t ? max( 1, (int) $t->best_of ) : 3;
+			$need    = intdiv( $best_of, 2 ) + 1;
+			$raw     = json_decode( wp_unslash( $_POST['sets'] ?? '' ), true );
+			if ( ! is_array( $raw ) || empty( $raw ) ) {
+				wp_send_json_error( array( 'message' => 'Bitte mindestens einen Satz eintragen.' ) );
+			}
+			$w1 = 0; $w2 = 0; $parts = array();
+			foreach ( $raw as $set ) {
+				if ( ! is_array( $set ) || count( $set ) !== 2 ) {
+					wp_send_json_error( array( 'message' => 'Ungültiges Satz-Format.' ) );
+				}
+				$a = (int) $set[0];
+				$b = (int) $set[1];
+				if ( $a < 0 || $b < 0 || $a > 99 || $b > 99 || $a === $b ) {
+					wp_send_json_error( array( 'message' => 'Ungültiger Satz: ' . $a . ':' . $b . ' — ein Satz braucht einen Sieger.' ) );
+				}
+				if ( $a > $b ) { $w1++; } else { $w2++; }
+				$parts[] = $a . ':' . $b;
+			}
+			if ( count( $parts ) > $best_of ) {
+				wp_send_json_error( array( 'message' => 'Zu viele Sätze (max. ' . $best_of . ').' ) );
+			}
+			if ( $w1 !== $need && $w2 !== $need ) {
+				wp_send_json_error( array( 'message' => 'Kein Spieler hat ' . $need . ' Gewinnsätze — Ergebnis unvollständig.' ) );
+			}
+			if ( $w1 === $need && $w2 >= $need ) {
+				wp_send_json_error( array( 'message' => 'Ungültiges Ergebnis.' ) );
+			}
+			// Keine überzähligen Sätze nach der Entscheidung
+			$loser_sets = min( $w1, $w2 );
+			if ( count( $parts ) !== $need + $loser_sets ) {
+				wp_send_json_error( array( 'message' => 'Ungültige Satz-Anzahl für dieses Ergebnis.' ) );
+			}
+			$winner_id = $w1 > $w2 ? $p1 : $p2;
+			SDT_DB::set_result( $mid, $winner_id, implode( ', ', $parts ), 0 );
+		}
+
+		SDT_Scheduler::advance_winner( $mid );
+		self::sync_tournament_status( $mid );
+		wp_send_json_success();
+	}
+
+	/**
+	 * Turnier-Status nachziehen: finished, wenn alle Matches done sind.
+	 */
+	private static function sync_tournament_status( $mid ) {
+		$m = SDT_DB::get_match( $mid );
+		if ( ! $m ) return;
+		$all      = SDT_DB::get_matches( $m->tournament_id );
+		$all_done = ! empty( $all );
+		foreach ( $all as $x ) {
+			if ( $x->status !== 'done' ) { $all_done = false; break; }
+		}
+		$t = SDT_DB::get_tournament( $m->tournament_id );
+		// Bei "Gruppe + KO" gilt das Turnier erst nach den Brackets als fertig
+		if ( $all_done && $t && $t->format !== 'group_only' && ! SDT_Scheduler::has_bracket_matches( $m->tournament_id ) ) {
+			$all_done = false;
+		}
+		if ( $all_done ) {
+			SDT_DB::update_tournament( $m->tournament_id, array( 'status' => 'finished' ) );
+		} elseif ( $t && $t->status === 'finished' ) {
+			SDT_DB::update_tournament( $m->tournament_id, array( 'status' => 'running' ) );
+		}
 	}
 
 	public static function sdt_reset_match() {
@@ -160,8 +232,13 @@ class SDT_Ajax {
 		self::check();
 		$tid = (int) ( $_POST['tournament_id'] ?? 0 );
 		SDT_Scheduler::simulate_group_phase( $tid );
-		// Wenn alle Gruppenspiele fertig, Brackets generieren
-		if ( SDT_Scheduler::is_group_phase_done( $tid ) && ! SDT_Scheduler::has_bracket_matches( $tid ) ) {
+		$t = SDT_DB::get_tournament( $tid );
+		if ( $t && $t->format === 'group_only' ) {
+			if ( SDT_Scheduler::is_group_phase_done( $tid ) ) {
+				SDT_DB::update_tournament( $tid, array( 'status' => 'finished' ) );
+			}
+		} elseif ( SDT_Scheduler::is_group_phase_done( $tid ) && ! SDT_Scheduler::has_bracket_matches( $tid ) ) {
+			// Wenn alle Gruppenspiele fertig, Brackets generieren
 			SDT_Scheduler::generate_brackets( $tid );
 		}
 		wp_send_json_success();

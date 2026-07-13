@@ -7,6 +7,9 @@ class SDT_Admin {
 
 	const PAGE = 'sdt-tournaments';
 
+	/** true, wenn das aktuell gerenderte Turnier im Tennis-Modus läuft */
+	private static $tennis = false;
+
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_post' ) );
@@ -46,21 +49,32 @@ class SDT_Admin {
 			$name        = sanitize_text_field( wp_unslash( $_POST['name'] ?? 'Turnier' ) );
 			$num_groups  = max( 1, min( 12, (int) ( $_POST['num_groups'] ?? 4 ) ) );
 			$tables      = max( 1, min( 20, (int) ( $_POST['tables_count'] ?? 2 ) ) );
-			$id          = SDT_DB::create_tournament( $name, $num_groups, $tables );
+			$mode        = self::sanitize_mode( $_POST['mode'] ?? 'simple' );
+			$best_of     = self::sanitize_best_of( $_POST['best_of'] ?? 3 );
+			$format      = self::sanitize_format( $_POST['format'] ?? 'group_ko' );
+			$id          = SDT_DB::create_tournament( $name, $num_groups, $tables, $mode, $best_of, $format );
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::PAGE . '&action=edit&id=' . $id ) );
 			exit;
 		}
 
 		if ( isset( $_POST['sdt_update_settings'] ) && check_admin_referer( 'sdt_update' ) ) {
 			$id          = (int) ( $_POST['id'] ?? 0 );
+			$t           = SDT_DB::get_tournament( $id );
 			$name        = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
 			$num_groups  = max( 1, min( 12, (int) ( $_POST['num_groups'] ?? 4 ) ) );
 			$tables      = max( 1, min( 20, (int) ( $_POST['tables_count'] ?? 2 ) ) );
-			SDT_DB::update_tournament( $id, array(
+			$data        = array(
 				'name'         => $name,
 				'num_groups'   => $num_groups,
 				'tables_count' => $tables,
-			) );
+			);
+			// Modus/Format/Sätze nur im Setup änderbar (disabled-Felder senden nichts)
+			if ( $t && $t->status === 'setup' ) {
+				$data['mode']    = self::sanitize_mode( $_POST['mode'] ?? $t->mode );
+				$data['best_of'] = self::sanitize_best_of( $_POST['best_of'] ?? $t->best_of );
+				$data['format']  = self::sanitize_format( $_POST['format'] ?? $t->format );
+			}
+			SDT_DB::update_tournament( $id, $data );
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::PAGE . '&action=edit&id=' . $id . '&updated=1' ) );
 			exit;
 		}
@@ -85,6 +99,19 @@ class SDT_Admin {
 		}
 	}
 
+	private static function sanitize_mode( $v ) {
+		return in_array( $v, array( 'simple', 'tennis' ), true ) ? $v : 'simple';
+	}
+
+	private static function sanitize_best_of( $v ) {
+		$v = (int) $v;
+		return in_array( $v, array( 1, 3, 5, 7 ), true ) ? $v : 3;
+	}
+
+	private static function sanitize_format( $v ) {
+		return in_array( $v, array( 'group_ko', 'group_only' ), true ) ? $v : 'group_ko';
+	}
+
 	public static function render() {
 		$action = isset( $_GET['action'] ) ? sanitize_key( $_GET['action'] ) : '';
 		if ( $action === 'new' ) {
@@ -107,15 +134,17 @@ class SDT_Admin {
 			<hr class="wp-header-end">
 			<table class="wp-list-table widefat fixed striped">
 				<thead><tr>
-					<th>Name</th><th>Status</th><th>Gruppen</th><th>Tische</th><th>Datum</th><th>Aktion</th>
+					<th>Name</th><th>Status</th><th>Modus</th><th>Format</th><th>Gruppen</th><th>Tische</th><th>Datum</th><th>Aktion</th>
 				</tr></thead>
 				<tbody>
 				<?php if ( empty( $rows ) ) : ?>
-					<tr><td colspan="6">Noch keine Turniere.</td></tr>
+					<tr><td colspan="8">Noch keine Turniere.</td></tr>
 				<?php else : foreach ( $rows as $t ) : ?>
 					<tr>
 						<td><strong><a href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::PAGE . '&action=edit&id=' . $t->id ) ); ?>"><?php echo esc_html( $t->name ); ?></a></strong></td>
 						<td><?php echo esc_html( self::status_label( $t->status ) ); ?></td>
+						<td><?php echo ( $t->mode ?? 'simple' ) === 'tennis' ? '🎾 Tennis (Best of ' . (int) $t->best_of . ')' : 'Standard'; ?></td>
+						<td><?php echo ( $t->format ?? 'group_ko' ) === 'group_only' ? 'Nur Gruppen' : 'Gruppen + KO'; ?></td>
 						<td><?php echo (int) $t->num_groups; ?></td>
 						<td><?php echo (int) $t->tables_count; ?></td>
 						<td><?php echo esc_html( mysql2date( 'd.m.Y H:i', $t->created_at ) ); ?></td>
@@ -149,11 +178,41 @@ class SDT_Admin {
 						<td><input id="name" type="text" name="name" required class="regular-text" value="Weller Open 2026"></td>
 					</tr>
 					<tr>
-						<th><label for="num_groups">Anzahl Gruppen</label></th>
-						<td><input id="num_groups" type="number" name="num_groups" min="1" max="12" value="4" class="small-text"> <span class="description">(typisch 4–7)</span></td>
+						<th><label for="sdt_mode">Modus</label></th>
+						<td>
+							<select id="sdt_mode" name="mode">
+								<option value="simple">Standard (nur Sieg/Niederlage)</option>
+								<option value="tennis">🎾 Tennis (Satz-Ergebnisse)</option>
+							</select>
+						</td>
+					</tr>
+					<tr class="sdt-row-bestof" style="display:none;">
+						<th><label for="sdt_best_of">Anzahl Sätze</label></th>
+						<td>
+							<select id="sdt_best_of" name="best_of">
+								<option value="1">1 Satz</option>
+								<option value="3" selected>Best of 3 (2 Gewinnsätze)</option>
+								<option value="5">Best of 5 (3 Gewinnsätze)</option>
+								<option value="7">Best of 7 (4 Gewinnsätze)</option>
+							</select>
+						</td>
 					</tr>
 					<tr>
-						<th><label for="tables_count">Anzahl Tische (parallele Spiele)</label></th>
+						<th><label for="sdt_format">Turnierformat</label></th>
+						<td>
+							<select id="sdt_format" name="format">
+								<option value="group_ko">Gruppenphase + Endrunde (KO)</option>
+								<option value="group_only">Nur Gruppenphase (Jeder gegen Jeden)</option>
+							</select>
+							<p class="description">Bei „Nur Gruppenphase" reicht auch 1 große Gruppe — die Tabelle ist dann das Endergebnis.</p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="num_groups">Anzahl Gruppen</label></th>
+						<td><input id="num_groups" type="number" name="num_groups" min="1" max="12" value="4" class="small-text"> <span class="description">(typisch 4–7, bei „Nur Gruppenphase" gern 1)</span></td>
+					</tr>
+					<tr>
+						<th><label for="tables_count">Anzahl Tische/Plätze (parallele Spiele)</label></th>
 						<td><input id="tables_count" type="number" name="tables_count" min="1" max="20" value="2" class="small-text"></td>
 					</tr>
 				</table>
@@ -162,6 +221,15 @@ class SDT_Admin {
 					<a href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::PAGE ) ); ?>" class="button">Abbrechen</a>
 				</p>
 			</form>
+			<script>
+			(function () {
+				var mode = document.getElementById('sdt_mode');
+				var row  = document.querySelector('.sdt-row-bestof');
+				function toggle() { row.style.display = mode.value === 'tennis' ? '' : 'none'; }
+				mode.addEventListener('change', toggle);
+				toggle();
+			})();
+			</script>
 		</div>
 		<?php
 	}
@@ -172,11 +240,14 @@ class SDT_Admin {
 			echo '<div class="wrap"><h1>Turnier nicht gefunden</h1></div>';
 			return;
 		}
+		self::$tennis = ( $t->mode === 'tennis' );
 		?>
-		<div class="wrap sdt-wrap" data-tid="<?php echo (int) $t->id; ?>">
+		<div class="wrap sdt-wrap" data-tid="<?php echo (int) $t->id; ?>" data-mode="<?php echo esc_attr( $t->mode ); ?>" data-bestof="<?php echo (int) $t->best_of; ?>">
 			<h1>
 				<?php echo esc_html( $t->name ); ?>
 				<span class="sdt-status sdt-status-<?php echo esc_attr( $t->status ); ?>"><?php echo esc_html( self::status_label( $t->status ) ); ?></span>
+				<?php if ( self::$tennis ) : ?><span class="sdt-status sdt-status-mode">🎾 Tennis · Best of <?php echo (int) $t->best_of; ?></span><?php endif; ?>
+				<?php if ( $t->format === 'group_only' ) : ?><span class="sdt-status sdt-status-mode">Nur Gruppenphase</span><?php endif; ?>
 			</h1>
 
 			<?php if ( isset( $_GET['updated'] ) ) : ?>
@@ -188,13 +259,40 @@ class SDT_Admin {
 				<form method="post" style="padding:12px 0;">
 					<?php wp_nonce_field( 'sdt_update' ); ?>
 					<input type="hidden" name="id" value="<?php echo (int) $t->id; ?>">
+					<?php $setup = $t->status === 'setup'; ?>
 					<label>Name <input type="text" name="name" value="<?php echo esc_attr( $t->name ); ?>"></label>
+					&nbsp;
+					<label>Modus
+						<select name="mode" id="sdt_mode" <?php disabled( ! $setup ); ?>>
+							<option value="simple" <?php selected( $t->mode, 'simple' ); ?>>Standard</option>
+							<option value="tennis" <?php selected( $t->mode, 'tennis' ); ?>>🎾 Tennis</option>
+						</select>
+					</label>
+					&nbsp;
+					<label class="sdt-row-bestof">Sätze
+						<select name="best_of" <?php disabled( ! $setup ); ?>>
+							<option value="1" <?php selected( (int) $t->best_of, 1 ); ?>>1 Satz</option>
+							<option value="3" <?php selected( (int) $t->best_of, 3 ); ?>>Best of 3</option>
+							<option value="5" <?php selected( (int) $t->best_of, 5 ); ?>>Best of 5</option>
+							<option value="7" <?php selected( (int) $t->best_of, 7 ); ?>>Best of 7</option>
+						</select>
+					</label>
+					&nbsp;
+					<label>Format
+						<select name="format" <?php disabled( ! $setup ); ?>>
+							<option value="group_ko" <?php selected( $t->format, 'group_ko' ); ?>>Gruppen + KO</option>
+							<option value="group_only" <?php selected( $t->format, 'group_only' ); ?>>Nur Gruppenphase</option>
+						</select>
+					</label>
 					&nbsp;
 					<label>Gruppen <input type="number" name="num_groups" min="1" max="12" value="<?php echo (int) $t->num_groups; ?>" class="small-text"></label>
 					&nbsp;
-					<label>Tische <input type="number" name="tables_count" min="1" max="20" value="<?php echo (int) $t->tables_count; ?>" class="small-text"></label>
+					<label>Tische/Plätze <input type="number" name="tables_count" min="1" max="20" value="<?php echo (int) $t->tables_count; ?>" class="small-text"></label>
 					&nbsp;
 					<button type="submit" name="sdt_update_settings" class="button">Speichern</button>
+					<?php if ( ! $setup ) : ?>
+						<span class="description">Modus, Sätze und Format sind nur im Setup änderbar.</span>
+					<?php endif; ?>
 				</form>
 			</details>
 
@@ -324,6 +422,7 @@ class SDT_Admin {
 
 		<nav class="sdt-admin-nav">
 			<?php if ( ! empty( $next ) ) : ?><a href="#sdt-a-next">⏭ Nächste Spiele</a><?php endif; ?>
+			<?php if ( self::$tennis ) : ?><a href="#sdt-a-matrix">🗂 Spielplan-Matrix</a><?php endif; ?>
 			<?php if ( $has_gold ) : ?><a href="#sdt-a-gold-winner">🏆 Goldrunde</a><?php endif; ?>
 			<?php if ( $has_gold_trost ) : ?><a href="#sdt-a-gold-loser">🥉 Trostrunde Gold</a><?php endif; ?>
 			<?php if ( $has_silber ) : ?><a href="#sdt-a-silber-winner">🥈 Silberrunde</a><?php endif; ?>
@@ -344,10 +443,16 @@ class SDT_Admin {
 		</div>
 
 		<?php if ( $group_done && ! $has_brackets ) : ?>
-			<div class="notice notice-success inline" style="margin:14px 0; padding:10px 14px;">
-				<p><strong>Vorrunde abgeschlossen!</strong> Jetzt die Brackets generieren, dann geht's in die KO-Phase.</p>
-				<p><button type="button" class="button button-primary sdt-generate-brackets">🏆 Gold- und Silberrunde generieren</button></p>
-			</div>
+			<?php if ( $t->format === 'group_only' ) : ?>
+				<div class="notice notice-success inline" style="margin:14px 0; padding:10px 14px;">
+					<p><strong>🏁 Alle Spiele abgeschlossen!</strong> Die Abschluss-Tabellen unten sind das Endergebnis.</p>
+				</div>
+			<?php else : ?>
+				<div class="notice notice-success inline" style="margin:14px 0; padding:10px 14px;">
+					<p><strong>Vorrunde abgeschlossen!</strong> Jetzt die Brackets generieren, dann geht's in die KO-Phase.</p>
+					<p><button type="button" class="button button-primary sdt-generate-brackets">🏆 Gold- und Silberrunde generieren</button></p>
+				</div>
+			<?php endif; ?>
 		<?php endif; ?>
 
 		<h2 id="sdt-a-next">Nächste Spiele (<?php echo count( $next ); ?>/<?php echo (int) $t->tables_count; ?> Tische)</h2>
@@ -372,8 +477,12 @@ class SDT_Admin {
 						<td>vs.</td>
 						<td><?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></td>
 						<td>
-							<button class="button button-primary sdt-win" data-winner="<?php echo (int) $m->player1_id; ?>">Sieg <?php echo esc_html( $players[ $m->player1_id ] ?? '?' ); ?></button>
-							<button class="button button-primary sdt-win" data-winner="<?php echo (int) $m->player2_id; ?>">Sieg <?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></button>
+							<?php if ( self::$tennis ) : ?>
+								<?php self::result_button( $m, $players, 'button button-primary' ); ?>
+							<?php else : ?>
+								<button class="button button-primary sdt-win" data-winner="<?php echo (int) $m->player1_id; ?>">Sieg <?php echo esc_html( $players[ $m->player1_id ] ?? '?' ); ?></button>
+								<button class="button button-primary sdt-win" data-winner="<?php echo (int) $m->player2_id; ?>">Sieg <?php echo esc_html( $players[ $m->player2_id ] ?? '?' ); ?></button>
+							<?php endif; ?>
 						</td>
 					</tr>
 				<?php endforeach; ?>
@@ -398,6 +507,8 @@ class SDT_Admin {
 			</table>
 		<?php endif; ?>
 
+		<?php if ( self::$tennis ) : self::render_group_matrices( $t, $group_matches, $players, $has_brackets ); endif; ?>
+
 		<?php if ( $has_brackets ) : self::render_brackets( $t, $matches, $players ); endif; ?>
 
 		<h2 id="sdt-a-vorrunden">Vorrunden-Tabellen <span class="description">(<?php echo (int) $done; ?>/<?php echo (int) $total; ?> Spiele abgeschlossen)</span></h2>
@@ -406,7 +517,7 @@ class SDT_Admin {
 				<div class="sdt-standing-group">
 					<h3>Gruppe <?php echo esc_html( $label ); ?></h3>
 					<table class="wp-list-table widefat striped">
-						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th></tr></thead>
+						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th><?php if ( self::$tennis ) : ?><th>Sätze</th><?php endif; ?></tr></thead>
 						<tbody>
 						<?php foreach ( $rows as $i => $r ) : $pos = $i + 1; ?>
 							<tr class="sdt-q-<?php echo (int) $r['qualified']; ?>">
@@ -420,6 +531,9 @@ class SDT_Admin {
 								<td><?php echo (int) $r['played']; ?></td>
 								<td><strong><?php echo (int) $r['wins']; ?></strong></td>
 								<td><?php echo (int) $r['losses']; ?></td>
+								<?php if ( self::$tennis ) : ?>
+									<td><?php echo (int) $r['sets_won']; ?>:<?php echo (int) $r['sets_lost']; ?></td>
+								<?php endif; ?>
 							</tr>
 						<?php endforeach; ?>
 						</tbody>
@@ -444,6 +558,9 @@ class SDT_Admin {
 					<td>
 						<?php if ( $m->status === 'done' && $m->winner_id ) : ?>
 							🏆 <strong><?php echo esc_html( $players[ $m->winner_id ] ?? '?' ); ?></strong>
+							<?php $rt = self::result_text( $m ); if ( $rt ) : ?>
+								<span class="sdt-score"><?php echo esc_html( $rt ); ?></span>
+							<?php endif; ?>
 						<?php else : ?>
 							<em>offen</em>
 						<?php endif; ?>
@@ -469,6 +586,112 @@ class SDT_Admin {
 			<button type="submit" name="sdt_reset_to_setup" class="button">Zurück zum Setup</button>
 		</form>
 		<?php
+	}
+
+	/**
+	 * Button "Ergebnis eintragen" für Tennis-Matches — öffnet den JS-Dialog.
+	 */
+	private static function result_button( $m, $players, $cls = 'button button-small', $label = '🎾 Ergebnis' ) {
+		?>
+		<button class="<?php echo esc_attr( $cls ); ?> sdt-result"
+			title="Ergebnis eintragen: <?php echo esc_attr( ( $players[ $m->player1_id ] ?? '?' ) . ' vs. ' . ( $players[ $m->player2_id ] ?? '?' ) ); ?>"
+			data-mid="<?php echo (int) $m->id; ?>"
+			data-p1="<?php echo (int) $m->player1_id; ?>"
+			data-p2="<?php echo (int) $m->player2_id; ?>"
+			data-p1name="<?php echo esc_attr( $players[ $m->player1_id ] ?? '?' ); ?>"
+			data-p2name="<?php echo esc_attr( $players[ $m->player2_id ] ?? '?' ); ?>"><?php echo esc_html( $label ); ?></button>
+		<?php
+	}
+
+	/**
+	 * Kreuztabelle (Spieler × Spieler) pro Gruppe — alle Spiele in beliebiger
+	 * Reihenfolge eintragbar. Nur im Tennis-Modus.
+	 */
+	private static function render_group_matrices( $t, $group_matches, $players, $has_brackets ) {
+		$by_group = array();
+		foreach ( SDT_DB::get_players( $t->id ) as $p ) {
+			if ( $p->group_label ) {
+				$by_group[ $p->group_label ][] = $p;
+			}
+		}
+		ksort( $by_group );
+		if ( empty( $by_group ) ) return;
+
+		// Matches nach Spieler-Paar indizieren
+		$pair = array();
+		foreach ( $group_matches as $m ) {
+			$pair[ $m->player1_id . '-' . $m->player2_id ] = $m;
+		}
+		?>
+		<h2 id="sdt-a-matrix" style="margin-top:30px;">🗂 Spielplan-Matrix <span class="description">(alle Spiele — Reihenfolge frei wählbar)</span></h2>
+		<?php foreach ( $by_group as $label => $grp_players ) : ?>
+			<h3 style="margin-bottom:6px;"><?php echo count( $by_group ) > 1 ? 'Gruppe ' . esc_html( $label ) : 'Alle Begegnungen'; ?></h3>
+			<div class="sdt-matrix-scroll">
+				<table class="sdt-matrix">
+					<thead>
+						<tr>
+							<th class="sdt-mx-corner"></th>
+							<?php foreach ( $grp_players as $cp ) : ?>
+								<th><?php echo esc_html( $cp->name ); ?></th>
+							<?php endforeach; ?>
+						</tr>
+					</thead>
+					<tbody>
+					<?php foreach ( $grp_players as $rp ) : ?>
+						<tr>
+							<th class="sdt-mx-rowhead"><?php echo esc_html( $rp->name ); ?></th>
+							<?php foreach ( $grp_players as $cp ) :
+								if ( (int) $rp->id === (int) $cp->id ) {
+									echo '<td class="sdt-mx-self"></td>';
+									continue;
+								}
+								$m = $pair[ $rp->id . '-' . $cp->id ] ?? $pair[ $cp->id . '-' . $rp->id ] ?? null;
+								if ( ! $m ) {
+									echo '<td class="sdt-mx-none">–</td>';
+									continue;
+								}
+								if ( $m->status === 'done' && $m->winner_id ) {
+									$row_won = (int) $m->winner_id === (int) $rp->id;
+									if ( ! empty( $m->walkover ) ) {
+										$text = 'w.o.';
+									} else {
+										// Score aus Sicht des Zeilen-Spielers
+										$sets = SDT_Scheduler::parse_score( $m->score );
+										$parts = array();
+										foreach ( $sets as $s ) {
+											$parts[] = ( (int) $m->player1_id === (int) $rp->id ) ? $s[0] . ':' . $s[1] : $s[1] . ':' . $s[0];
+										}
+										$text = $parts ? implode( ', ', $parts ) : '✓';
+									}
+									?>
+									<td class="<?php echo $row_won ? 'sdt-mx-win' : 'sdt-mx-loss'; ?>" data-mid="<?php echo (int) $m->id; ?>">
+										<span class="sdt-mx-score"><?php echo esc_html( $text ); ?></span>
+										<?php if ( ! $has_brackets ) : ?>
+											<button class="sdt-reset sdt-mx-reset" title="Ergebnis zurücksetzen">↻</button>
+										<?php endif; ?>
+									</td>
+									<?php
+								} else {
+									?>
+									<td class="sdt-mx-open"><?php self::result_button( $m, $players, 'button button-small sdt-mx-btn', '＋' ); ?></td>
+									<?php
+								}
+							endforeach; ?>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		<?php endforeach; ?>
+		<?php
+	}
+
+	/**
+	 * Ergebnis-Text eines fertigen Matches: "6:4, 3:6, 7:5" bzw. "w.o.".
+	 */
+	private static function result_text( $m ) {
+		if ( ! empty( $m->walkover ) ) return 'w.o.';
+		return ! empty( $m->score ) ? $m->score : '';
 	}
 
 	private static function render_brackets( $t, $matches, $players ) {
@@ -589,16 +812,22 @@ class SDT_Admin {
 		<div class="sdt-bracket-match sdt-bm-<?php echo esc_attr( $cls ); ?>" data-mid="<?php echo (int) $m->id; ?>">
 			<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === $p1_id ) ? 'sdt-bm-winner' : ''; ?>">
 				<span class="sdt-bm-name"><?php echo esc_html( $p1 ?: '–' ); ?></span>
-				<?php if ( $ready ) : ?>
+				<?php if ( $ready && ! self::$tennis ) : ?>
 					<button class="button button-small sdt-win" data-winner="<?php echo $p1_id; ?>">Sieg</button>
 				<?php endif; ?>
 			</div>
 			<div class="sdt-bm-slot <?php echo ( $done && (int) $m->winner_id === $p2_id ) ? 'sdt-bm-winner' : ''; ?>">
 				<span class="sdt-bm-name"><?php echo esc_html( $p2 ?: '–' ); ?></span>
-				<?php if ( $ready ) : ?>
+				<?php if ( $ready && ! self::$tennis ) : ?>
 					<button class="button button-small sdt-win" data-winner="<?php echo $p2_id; ?>">Sieg</button>
 				<?php endif; ?>
 			</div>
+			<?php if ( $ready && self::$tennis ) : ?>
+				<div class="sdt-bm-actions"><?php self::result_button( $m, $players ); ?></div>
+			<?php endif; ?>
+			<?php $rt = $done ? self::result_text( $m ) : ''; if ( $rt ) : ?>
+				<div class="sdt-bm-score"><?php echo esc_html( $rt ); ?></div>
+			<?php endif; ?>
 			<?php if ( $done ) : ?>
 				<button class="button button-small sdt-reset sdt-bm-reset">↻</button>
 			<?php endif; ?>
@@ -611,7 +840,7 @@ class SDT_Admin {
 		$players = SDT_DB::get_players( $tid );
 		$matches = SDT_DB::get_matches( $tid );
 		$data = array(
-			'export_version' => 1,
+			'export_version' => 2,
 			'exported_at'    => current_time( 'mysql' ),
 			'tournament'     => $t,
 			'players'        => $players,

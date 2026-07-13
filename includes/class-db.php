@@ -19,6 +19,9 @@ class SDT_DB {
 			status VARCHAR(20) NOT NULL DEFAULT 'setup',
 			num_groups TINYINT UNSIGNED NOT NULL DEFAULT 4,
 			tables_count TINYINT UNSIGNED NOT NULL DEFAULT 2,
+			mode VARCHAR(20) NOT NULL DEFAULT 'simple',
+			best_of TINYINT UNSIGNED NOT NULL DEFAULT 3,
+			format VARCHAR(20) NOT NULL DEFAULT 'group_ko',
 			created_at DATETIME NOT NULL,
 			PRIMARY KEY  (id)
 		) $charset;";
@@ -47,6 +50,8 @@ class SDT_DB {
 			player2_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			winner_id BIGINT UNSIGNED NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'pending',
+			score VARCHAR(100) NULL,
+			walkover TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			finished_at DATETIME NULL,
 			phase VARCHAR(20) NOT NULL DEFAULT 'group',
 			bracket_round TINYINT UNSIGNED NULL,
@@ -71,15 +76,18 @@ class SDT_DB {
 
 	/* ---------- tournaments ---------- */
 
-	public static function create_tournament( $name, $num_groups, $tables_count ) {
+	public static function create_tournament( $name, $num_groups, $tables_count, $mode = 'simple', $best_of = 3, $format = 'group_ko' ) {
 		global $wpdb;
 		$wpdb->insert( self::t_tournaments(), array(
 			'name'         => $name,
 			'status'       => 'setup',
 			'num_groups'   => $num_groups,
 			'tables_count' => $tables_count,
+			'mode'         => $mode,
+			'best_of'      => $best_of,
+			'format'       => $format,
 			'created_at'   => current_time( 'mysql' ),
-		), array( '%s', '%s', '%d', '%d', '%s' ) );
+		), array( '%s', '%s', '%d', '%d', '%s', '%d', '%s', '%s' ) );
 		return (int) $wpdb->insert_id;
 	}
 
@@ -278,16 +286,26 @@ class SDT_DB {
 	}
 
 	public static function set_winner( $match_id, $winner_id ) {
+		return self::set_result( $match_id, $winner_id, null, 0 );
+	}
+
+	/**
+	 * Ergebnis inkl. optionalem Satz-Score ("6:4, 3:6, 7:5") und Walkover-Flag.
+	 * winner_id = 0 setzt das Match komplett zurück (Score/Walkover werden geleert).
+	 */
+	public static function set_result( $match_id, $winner_id, $score = null, $walkover = 0 ) {
 		global $wpdb;
 		return $wpdb->update(
 			self::t_matches(),
 			array(
 				'winner_id'   => $winner_id ? (int) $winner_id : null,
 				'status'      => $winner_id ? 'done' : 'pending',
+				'score'       => $winner_id && $score !== null ? $score : null,
+				'walkover'    => $winner_id ? (int) (bool) $walkover : 0,
 				'finished_at' => $winner_id ? current_time( 'mysql' ) : null,
 			),
 			array( 'id' => (int) $match_id ),
-			array( '%d', '%s', '%s' ),
+			array( '%d', '%s', '%s', '%d', '%s' ),
 			array( '%d' )
 		);
 	}

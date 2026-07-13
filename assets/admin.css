@@ -217,9 +217,170 @@ html { scroll-behavior: smooth; }
 .sdt-next .sdt-win { margin-right: 4px; }
 .sdt-standings {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 	gap: 16px;
 }
+.sdt-standing-group { min-width: 0; overflow-x: auto; }
 .sdt-standing-group h3 { margin: 0 0 6px; }
 .sdt-q-1 { background: #fff8d6 !important; font-weight: 600; }
 .sdt-q-2 { background: #f0f0f0 !important; font-weight: 600; }
+
+/* --- v2.0: Tennis-Modus --- */
+.sdt-status-mode {
+	background: #e6f4ea;
+	color: #1e6b30;
+	border: 1px solid #b7dfc2;
+	border-radius: 12px;
+	font-size: 12px;
+	padding: 3px 10px;
+	vertical-align: middle;
+	margin-left: 6px;
+}
+.sdt-score {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 2px 8px;
+	background: #eef2f6;
+	border: 1px solid #dde3e9;
+	border-radius: 10px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #333;
+	white-space: nowrap;
+}
+.sdt-bm-score {
+	font-size: 11px;
+	font-weight: 600;
+	color: #555;
+	padding: 3px 6px 1px;
+	border-top: 1px dashed #dde3e9;
+	text-align: center;
+	white-space: nowrap;
+}
+.sdt-bm-actions { padding: 4px 6px; text-align: center; }
+
+/* Spielplan-Matrix (Tennis-Modus) */
+.sdt-matrix-scroll {
+	overflow-x: auto;
+	max-width: 100%;
+	margin-bottom: 20px;
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 4px;
+}
+.sdt-matrix {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 12px;
+}
+.sdt-matrix th, .sdt-matrix td {
+	border: 1px solid #e2e4e7;
+	padding: 6px 8px;
+	text-align: center;
+	white-space: nowrap;
+	min-width: 72px;
+}
+.sdt-matrix thead th {
+	background: #f6f7f7;
+	font-weight: 600;
+	max-width: 110px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sdt-matrix .sdt-mx-rowhead {
+	background: #f6f7f7;
+	font-weight: 600;
+	text-align: left;
+	position: sticky;
+	left: 0;
+	z-index: 2;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sdt-matrix .sdt-mx-corner {
+	background: #f6f7f7;
+	position: sticky;
+	left: 0;
+	z-index: 3;
+}
+.sdt-mx-self {
+	background: repeating-linear-gradient(45deg, #f0f0f1, #f0f0f1 4px, #e4e5e7 4px, #e4e5e7 8px);
+}
+.sdt-mx-win  { background: #e6f4ea; color: #1e6b30; font-weight: 700; }
+.sdt-mx-loss { background: #fbeaea; color: #8a1f1f; }
+.sdt-mx-none { color: #bbb; }
+.sdt-mx-score { white-space: nowrap; }
+.sdt-mx-btn.button {
+	min-height: 24px;
+	line-height: 22px;
+	padding: 0 10px;
+	font-weight: 700;
+}
+.sdt-mx-reset {
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	color: #888;
+	font-size: 13px;
+	padding: 0 2px;
+	margin-left: 4px;
+	vertical-align: middle;
+}
+.sdt-mx-reset:hover { color: #b32d2e; }
+
+/* Ergebnis-Dialog */
+.sdt-modal-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.55);
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.sdt-modal {
+	background: #fff;
+	border-radius: 8px;
+	padding: 20px 24px;
+	min-width: 340px;
+	max-width: 92vw;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+.sdt-modal h2 { margin: 0 0 14px; font-size: 1.2em; }
+.sdt-modal-setrow {
+	display: grid;
+	grid-template-columns: 60px 64px 12px 64px;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.sdt-modal-sethead { margin-bottom: 2px; }
+.sdt-modal-pname {
+	font-size: 11px;
+	font-weight: 600;
+	color: #555;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sdt-modal-setrow label { font-weight: 600; font-size: 12px; }
+.sdt-modal-setrow input { width: 100%; text-align: center; }
+.sdt-modal-colon { text-align: center; font-weight: 700; color: #999; }
+.sdt-modal-wo { margin: 14px 0 4px; padding-top: 10px; border-top: 1px solid #eee; }
+.sdt-wo-toggle { font-weight: 600; }
+.sdt-wo-winner { margin-top: 8px; }
+.sdt-wo-winner p { margin: 0 0 6px; font-weight: 600; }
+.sdt-wo-winner label { display: block; margin-bottom: 4px; }
+.sdt-modal-error {
+	margin: 10px 0 0;
+	padding: 8px 10px;
+	background: #fbeaea;
+	border-left: 3px solid #b32d2e;
+	color: #8a1f1f;
+	font-size: 13px;
+}
+.sdt-modal-buttons { margin-top: 16px; text-align: right; }

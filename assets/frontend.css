@@ -43,9 +43,11 @@ html { scroll-behavior: smooth; }
 .sdt-fe-nav a:hover { background: #eaf3ff; }
 .sdt-fe [id] { scroll-margin-top: 20px; }
 
-@media (max-width: 980px) {
+@media (max-width: 600px) {
 	.sdt-fe-nav {
-		position: static;
+		position: sticky;
+		top: 0;
+		right: auto;
 		transform: none;
 		max-width: none;
 		flex-direction: row;
@@ -123,7 +125,7 @@ html { scroll-behavior: smooth; }
 /* Vorrunden-Tabellen */
 .sdt-fe-standings {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 	gap: 16px;
 }
 .sdt-fe-group {
@@ -131,6 +133,8 @@ html { scroll-behavior: smooth; }
 	border: 1px solid #e3e6ea;
 	border-radius: 6px;
 	padding: 10px 12px;
+	overflow-x: auto;
+	min-width: 0;
 }
 .sdt-fe-group h4 { margin: 0 0 8px; font-size: 0.95em; font-weight: 600; }
 .sdt-fe-table .sdt-q-1 { background: #fff4c8; font-weight: 700; }
@@ -272,6 +276,17 @@ html { scroll-behavior: smooth; }
 .sdt-fe-podium-3 .sdt-fe-podium-block {
 	background: linear-gradient(180deg, #d4956a 0%, #97623c 100%);
 	height: 70px;
+}
+
+/* v2.0: Satz-Ergebnisse (Tennis-Modus) */
+.sdt-fe-bm-score {
+	font-size: 11px;
+	font-weight: 600;
+	color: #666;
+	text-align: center;
+	padding: 4px 0 5px !important;
+	border-top: 1px dashed #dde3e9 !important;
+	white-space: nowrap;
 }
 
 @media (max-width: 720px) {

@@ -485,9 +485,54 @@ class SDT_Scheduler {
 	}
 
 	/**
+	 * Parst einen Satz-Score-String "6:4, 3:6, 7:5" in ein Array von [p1, p2]-Paaren.
+	 */
+	public static function parse_score( $score ) {
+		$sets = array();
+		if ( ! $score ) return $sets;
+		foreach ( explode( ',', $score ) as $part ) {
+			$part = trim( $part );
+			if ( ! preg_match( '/^(\d+):(\d+)$/', $part, $mm ) ) continue;
+			$sets[] = array( (int) $mm[1], (int) $mm[2] );
+		}
+		return $sets;
+	}
+
+	/**
+	 * Zufälliges Tennis-Ergebnis für die Simulation.
+	 * Liefert array( score_string_aus_p1_sicht, winner_slot 1|2 ).
+	 */
+	public static function random_tennis_score( $best_of ) {
+		$best_of = max( 1, (int) $best_of );
+		$need    = intdiv( $best_of, 2 ) + 1;
+		$w_slot  = wp_rand( 1, 2 );
+		$w_sets  = 0;
+		$l_sets  = 0;
+		$parts   = array();
+		while ( $w_sets < $need ) {
+			// Satz-Sieger: Match-Sieger gewinnt leicht bevorzugt
+			$set_to_winner = ( $l_sets >= $need - 1 ) || ( wp_rand( 0, 9 ) < 6 );
+			$r = wp_rand( 0, 9 );
+			if ( $r < 7 )      { $win = 6; $lose = wp_rand( 0, 4 ); }
+			elseif ( $r < 9 )  { $win = 7; $lose = 5; }
+			else               { $win = 7; $lose = 6; }
+			if ( $set_to_winner ) {
+				$w_sets++;
+				$parts[] = ( $w_slot === 1 ) ? "$win:$lose" : "$lose:$win";
+			} else {
+				$l_sets++;
+				$parts[] = ( $w_slot === 1 ) ? "$lose:$win" : "$win:$lose";
+			}
+		}
+		return array( implode( ', ', $parts ), $w_slot );
+	}
+
+	/**
 	 * Füllt alle spielbaren Bracket-Matches iterativ mit Zufalls-Siegern, bis nichts mehr spielbar ist.
 	 */
 	public static function simulate_bracket_phase( $tournament_id ) {
+		$t         = SDT_DB::get_tournament( $tournament_id );
+		$is_tennis = $t && $t->mode === 'tennis';
 		for ( $safety = 0; $safety < 500; $safety++ ) {
 			$changed = false;
 			$matches = SDT_DB::get_matches( $tournament_id );
@@ -495,8 +540,14 @@ class SDT_Scheduler {
 				if ( $m->phase === 'group' ) continue;
 				if ( $m->status !== 'pending' ) continue;
 				if ( (int) $m->player1_id <= 0 || (int) $m->player2_id <= 0 ) continue;
-				$winner = ( wp_rand( 0, 1 ) === 0 ) ? (int) $m->player1_id : (int) $m->player2_id;
-				SDT_DB::set_winner( $m->id, $winner );
+				if ( $is_tennis ) {
+					list( $score, $w_slot ) = self::random_tennis_score( $t->best_of );
+					$winner = $w_slot === 1 ? (int) $m->player1_id : (int) $m->player2_id;
+					SDT_DB::set_result( $m->id, $winner, $score, 0 );
+				} else {
+					$winner = ( wp_rand( 0, 1 ) === 0 ) ? (int) $m->player1_id : (int) $m->player2_id;
+					SDT_DB::set_winner( $m->id, $winner );
+				}
 				self::advance_winner( $m->id );
 				$changed = true;
 			}
@@ -508,11 +559,19 @@ class SDT_Scheduler {
 	 * Füllt alle offenen Vorrunden-Spiele mit Zufalls-Siegern (zum Testen).
 	 */
 	public static function simulate_group_phase( $tournament_id ) {
+		$t         = SDT_DB::get_tournament( $tournament_id );
+		$is_tennis = $t && $t->mode === 'tennis';
 		foreach ( SDT_DB::get_matches( $tournament_id ) as $m ) {
 			if ( $m->phase !== 'group' ) continue;
 			if ( $m->status === 'done' ) continue;
-			$winner = ( wp_rand( 0, 1 ) === 0 ) ? (int) $m->player1_id : (int) $m->player2_id;
-			SDT_DB::set_winner( $m->id, $winner );
+			if ( $is_tennis ) {
+				list( $score, $w_slot ) = self::random_tennis_score( $t->best_of );
+				$winner = $w_slot === 1 ? (int) $m->player1_id : (int) $m->player2_id;
+				SDT_DB::set_result( $m->id, $winner, $score, 0 );
+			} else {
+				$winner = ( wp_rand( 0, 1 ) === 0 ) ? (int) $m->player1_id : (int) $m->player2_id;
+				SDT_DB::set_winner( $m->id, $winner );
+			}
 		}
 	}
 
@@ -674,8 +733,10 @@ class SDT_Scheduler {
 	 * Markiert qualified=1/2, wenn alle Spiele der Gruppe abgeschlossen sind.
 	 */
 	public static function standings( $tournament_id ) {
-		$players = SDT_DB::get_players( $tournament_id );
-		$matches = SDT_DB::get_matches( $tournament_id );
+		$players    = SDT_DB::get_players( $tournament_id );
+		$matches    = SDT_DB::get_matches( $tournament_id );
+		$t          = SDT_DB::get_tournament( $tournament_id );
+		$group_only = $t && isset( $t->format ) && $t->format === 'group_only';
 
 		$by_group     = array();
 		$players_by_g = array();
@@ -693,6 +754,8 @@ class SDT_Scheduler {
 					'played'    => 0,
 					'wins'      => 0,
 					'losses'    => 0,
+					'sets_won'  => 0,
+					'sets_lost' => 0,
 					'qualified' => 0,
 				);
 			}
@@ -718,6 +781,18 @@ class SDT_Scheduler {
 					$rows[ $l ]['played']++;
 				}
 				$h2h[ $w ][ $l ] = true;
+
+				// Satz-Statistik (Tennis-Modus)
+				if ( ! empty( $m->score ) ) {
+					$p1 = (int) $m->player1_id;
+					$p2 = (int) $m->player2_id;
+					foreach ( self::parse_score( $m->score ) as $set ) {
+						$set_w = $set[0] > $set[1] ? $p1 : $p2;
+						$set_l = $set_w === $p1 ? $p2 : $p1;
+						if ( isset( $rows[ $set_w ] ) ) $rows[ $set_w ]['sets_won']++;
+						if ( isset( $rows[ $set_l ] ) ) $rows[ $set_l ]['sets_lost']++;
+					}
+				}
 			}
 
 			$rows = array_values( $rows );
@@ -728,10 +803,16 @@ class SDT_Scheduler {
 				// direkter Vergleich
 				if ( ! empty( $h2h[ $a['id'] ][ $b['id'] ] ) ) return -1;
 				if ( ! empty( $h2h[ $b['id'] ][ $a['id'] ] ) ) return 1;
+				// Satzdifferenz (Tennis-Modus; im Standard-Modus immer 0:0)
+				$diff_a = $a['sets_won'] - $a['sets_lost'];
+				$diff_b = $b['sets_won'] - $b['sets_lost'];
+				if ( $diff_a !== $diff_b ) {
+					return $diff_b <=> $diff_a;
+				}
 				return strcmp( $a['name'], $b['name'] );
 			} );
 
-			if ( $group_done ) {
+			if ( $group_done && ! $group_only ) {
 				foreach ( $rows as $i => &$r ) {
 					$r['qualified'] = $i < 2 ? 1 : 2; // 1 = Gold, 2 = Silber
 				}

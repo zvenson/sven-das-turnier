@@ -27,8 +27,10 @@ class SDT_Frontend {
 			return '<p class="sdt-fe-empty">Aktuell läuft kein Turnier.</p>';
 		}
 
-		$matches      = SDT_DB::get_matches( $t->id );
+		$matches       = SDT_DB::get_matches( $t->id );
 		$bracket_phase = SDT_Scheduler::has_bracket_matches( $t->id );
+		$is_tennis     = ( $t->mode ?? 'simple' ) === 'tennis';
+		$group_only    = ( $t->format ?? 'group_ko' ) === 'group_only';
 
 		if ( $bracket_phase ) {
 			$next  = SDT_Scheduler::next_bracket_matches( $t->id, $t->tables_count );
@@ -58,7 +60,10 @@ class SDT_Frontend {
 			$has_silber      = (bool) array_filter( $bracket_matches, function ( $m ) { return $m->phase === 'silber'; } );
 			$has_gold_trost  = (bool) array_filter( $bracket_matches, function ( $m ) { return $m->phase === 'gold'   && ( $m->bracket_side ?: 'winner' ) === 'loser'; } );
 			$has_silber_trost = (bool) array_filter( $bracket_matches, function ( $m ) { return $m->phase === 'silber' && ( $m->bracket_side ?: 'winner' ) === 'loser'; } );
-			$has_podium      = self::compute_podium( 'gold', $matches ) || self::compute_podium( 'silber', $matches );
+			$group_phase_done = SDT_Scheduler::is_group_phase_done( $t->id );
+			$has_podium      = $group_only
+				? $group_phase_done
+				: ( self::compute_podium( 'gold', $matches ) || self::compute_podium( 'silber', $matches ) );
 			?>
 			<nav class="sdt-fe-nav">
 				<?php if ( ! empty( $next ) ) : ?><a href="#sdt-naechste">⏭ Nächste Spiele</a><?php endif; ?>
@@ -66,11 +71,19 @@ class SDT_Frontend {
 				<?php if ( $has_gold_trost ) : ?><a href="#sdt-gold-loser">🥉 Trostrunde Gold</a><?php endif; ?>
 				<?php if ( $has_silber ) : ?><a href="#sdt-silber-winner">🥈 Silberrunde</a><?php endif; ?>
 				<?php if ( $has_silber_trost ) : ?><a href="#sdt-silber-loser">🥉 Trostrunde Silber</a><?php endif; ?>
-				<a href="#sdt-vorrunden">📋 Vorrunden</a>
+				<a href="#sdt-vorrunden">📋 <?php echo $group_only ? 'Tabellen' : 'Vorrunden'; ?></a>
 				<?php if ( $has_podium ) : ?><a href="#sdt-podium">🏅 Endergebnis</a><?php endif; ?>
 			</nav>
 
-			<?php self::render_podiums( $matches, $players ); ?>
+			<?php
+			if ( $group_only ) {
+				if ( $group_phase_done ) {
+					self::render_podiums_group_only( $standings );
+				}
+			} else {
+				self::render_podiums( $matches, $players );
+			}
+			?>
 
 			<?php if ( ! empty( $next ) ) : ?>
 				<div id="sdt-naechste" class="sdt-fe-section sdt-fe-section-next">
@@ -90,13 +103,13 @@ class SDT_Frontend {
 			endif;
 			?>
 
-			<h3 id="sdt-vorrunden">Vorrunden-Tabellen</h3>
+			<h3 id="sdt-vorrunden"><?php echo $group_only ? 'Tabellen' : 'Vorrunden-Tabellen'; ?></h3>
 			<div class="sdt-fe-standings">
 			<?php foreach ( $standings as $label => $rows ) : ?>
 				<div class="sdt-fe-group">
 					<h4>Gruppe <?php echo esc_html( $label ); ?></h4>
 					<table class="sdt-fe-table">
-						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th></tr></thead>
+						<thead><tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th><?php if ( $is_tennis ) : ?><th>Sätze</th><?php endif; ?></tr></thead>
 						<tbody>
 						<?php foreach ( $rows as $i => $r ) : $pos = $i + 1; ?>
 							<tr class="sdt-q-<?php echo (int) $r['qualified']; ?>">
@@ -110,6 +123,9 @@ class SDT_Frontend {
 								<td><?php echo (int) $r['played']; ?></td>
 								<td><strong><?php echo (int) $r['wins']; ?></strong></td>
 								<td><?php echo (int) $r['losses']; ?></td>
+								<?php if ( $is_tennis ) : ?>
+									<td><?php echo (int) $r['sets_won']; ?>:<?php echo (int) $r['sets_lost']; ?></td>
+								<?php endif; ?>
 							</tr>
 						<?php endforeach; ?>
 						</tbody>
@@ -160,6 +176,52 @@ class SDT_Frontend {
 						</div>
 						<div class="sdt-fe-podium-col sdt-fe-podium-3">
 							<div class="sdt-fe-podium-name"><?php echo $third ? esc_html( $third ) : '&nbsp;'; ?></div>
+							<div class="sdt-fe-podium-block">
+								<span class="sdt-fe-podium-medal">🥉</span>
+								<span class="sdt-fe-podium-rank">3</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Podium für "Nur Gruppenphase": Top 3 jeder Gruppe, sobald alle Spiele durch sind.
+	 */
+	private static function render_podiums_group_only( $standings ) {
+		if ( empty( $standings ) ) return;
+		$multi = count( $standings ) > 1;
+		?>
+		<h3 id="sdt-podium" class="sdt-fe-podium-title">Endergebnis</h3>
+		<div class="sdt-fe-podiums">
+			<?php foreach ( $standings as $label => $rows ) :
+				$first  = $rows[0]['name'] ?? '';
+				$second = $rows[1]['name'] ?? '';
+				$third  = $rows[2]['name'] ?? '';
+				if ( $first === '' ) continue;
+				?>
+				<div class="sdt-fe-podium sdt-fe-podium-gold">
+					<div class="sdt-fe-podium-heading"><?php echo $multi ? '🏆 Gruppe ' . esc_html( $label ) : '🏆 Endstand'; ?></div>
+					<div class="sdt-fe-podium-stage">
+						<div class="sdt-fe-podium-col sdt-fe-podium-2">
+							<div class="sdt-fe-podium-name"><?php echo $second !== '' ? esc_html( $second ) : '&nbsp;'; ?></div>
+							<div class="sdt-fe-podium-block">
+								<span class="sdt-fe-podium-medal">🥈</span>
+								<span class="sdt-fe-podium-rank">2</span>
+							</div>
+						</div>
+						<div class="sdt-fe-podium-col sdt-fe-podium-1">
+							<div class="sdt-fe-podium-name"><?php echo esc_html( $first ); ?></div>
+							<div class="sdt-fe-podium-block">
+								<span class="sdt-fe-podium-medal">🥇</span>
+								<span class="sdt-fe-podium-rank">1</span>
+							</div>
+						</div>
+						<div class="sdt-fe-podium-col sdt-fe-podium-3">
+							<div class="sdt-fe-podium-name"><?php echo $third !== '' ? esc_html( $third ) : '&nbsp;'; ?></div>
 							<div class="sdt-fe-podium-block">
 								<span class="sdt-fe-podium-medal">🥉</span>
 								<span class="sdt-fe-podium-rank">3</span>
@@ -341,7 +403,15 @@ class SDT_Frontend {
 	}
 
 	private static function render_fe_match( $m, $players ) {
-		$done = $m->status === 'done' && $m->winner_id;
+		$done  = $m->status === 'done' && $m->winner_id;
+		$score = '';
+		if ( $done ) {
+			if ( ! empty( $m->walkover ) ) {
+				$score = 'w.o.';
+			} elseif ( ! empty( $m->score ) ) {
+				$score = $m->score;
+			}
+		}
 		?>
 		<div class="sdt-fe-bracket-match">
 			<div class="<?php echo $done && (int) $m->winner_id === (int) $m->player1_id ? 'sdt-fe-bm-w' : ''; ?>">
@@ -350,6 +420,9 @@ class SDT_Frontend {
 			<div class="<?php echo $done && (int) $m->winner_id === (int) $m->player2_id ? 'sdt-fe-bm-w' : ''; ?>">
 				<?php echo esc_html( $players[ $m->player2_id ] ?? '–' ); ?>
 			</div>
+			<?php if ( $score !== '' ) : ?>
+				<div class="sdt-fe-bm-score"><?php echo esc_html( $score ); ?></div>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
