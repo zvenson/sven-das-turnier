@@ -2,9 +2,18 @@
 
 > Eine sehr sehr coole Software für Spaßturniere — fertig für den Vereinsabend.
 
-WordPress-Plugin für Tischtennis-, Tennis- und alle anderen Turniere, wo zwei gegeneinander spielen. Gruppen mit Drag-and-Drop, Round-Robin-Vorrunde, Doppel-KO-Endrunde (Gold + Silber) inkl. Trostrunde und Spiel um Platz 3, wahlweise **Tennis-Modus mit Satz-Ergebnissen** und **„Nur Gruppenphase"-Format**, Live-Seite mit Auto-Refresh für den Beamer im Vereinsheim, Olympia-Treppchen am Ende.
+WordPress-Plugin für Turniere in **allen Sportarten, in denen zwei gegeneinander antreten** — Tischtennis, Tennis, Badminton, Squash, Kicker, Dart, Billard, Schach, Federball auf der Wiese … Wenn es zwei Namen und einen Sieger gibt, passt es. Gruppen mit Drag-and-Drop, Round-Robin-Vorrunde, Doppel-KO-Endrunde (Gold + Silber) inkl. Trostrunde und Spiel um Platz 3, wahlweise **Satz-Modus mit Satz-Ergebnissen** (Tennis, Tischtennis, Badminton …) und **„Nur Gruppenphase"-Format**, Live-Seite mit Auto-Refresh für den Beamer im Vereinsheim, Olympia-Treppchen am Ende.
 
-Entwickelt für die **Weller Open** (Open-Air Tischtennisturnier des TV Welle).
+Entwickelt für die **Weller Open** (Open-Air Tischtennisturnier des TV Welle) — im Einsatz aber sportart-unabhängig.
+
+### Für welche Sportarten?
+
+Das Plugin kennt keine sportart-spezifischen Regeln, sondern nur **1-gegen-1-Duelle mit einem Sieger** — dadurch ist es universell:
+
+| Modus | Passt für |
+|-------|-----------|
+| **Standard** (Sieg/Niederlage per Klick) | Kicker, Dart, Schach, Boule, Mario Kart, jedes „einer gewinnt"-Format |
+| **Satz-Modus** (Ergebnisse wie `6:4, 3:6, 7:5`, Best of 1/3/5/7) | Tennis, Tischtennis, Badminton, Squash, Volleyball 1v1, Beachminton |
 
 ![Endergebnis-Podium mit Gold/Silber/Bronze](docs/screenshots/podium.png)
 
@@ -223,6 +232,20 @@ Damit laufen Gold- und Silberrunde sowie Haupt- und Trostrunde möglichst gleich
 
 ### Reset-Cascade
 Beim Zurücksetzen eines Bracket-Matches werden die nachgelagerten Slots (Sieger-Feed und Verlierer-Feed) leer geräumt. Wenn der nachgelagerte Match selbst schon weitergespielt war (etwa durch Auto-Bye-Advance), wird rekursiv aufgeräumt. Nach dem Cascade läuft `resolve_byes` neu durch, damit Bye-Auto-Advances konsistent neu berechnet werden.
+
+---
+
+## Roadmap / Ideen
+
+### Ergebnismeldung durch Teilnehmer (PIN + Doppelbestätigung)
+
+Geplant: Spieler sollen ihre Ergebnisse **selbst online melden** können, ohne dass jemand am Admin-Rechner sitzen muss.
+
+- Jeder Teilnehmer erhält beim Turnierstart einen **persönlichen PIN** (z. B. 4-stellig, auf der Startkarte oder per Anmeldebestätigung)
+- Auf der Live-Seite (oder einer eigenen Melde-Seite per Shortcode) kann ein Spieler sein aktuelles Spiel auswählen und das Ergebnis eintragen — **nur mit gültigem PIN**
+- **Doppelbestätigung (Double-Confirm):** Das Ergebnis wird erst gewertet, wenn **beide Spieler** es mit ihrem jeweiligen PIN bestätigt haben — der eine meldet, der andere bestätigt. Bei Widerspruch geht das Match in einen Klär-Status, den nur der Turnierleiter im Admin auflösen kann
+- Turnierleiter behält volle Kontrolle: Admin-Eingaben überschreiben Spieler-Meldungen, unbestätigte Meldungen sind in der Nächste-Spiele-Box markiert
+- Sicherheit: PINs werden gehasht gespeichert, Rate-Limiting gegen Durchprobieren, Meldung nur für Matches möglich, an denen der PIN-Inhaber selbst beteiligt ist
 
 ---
 
