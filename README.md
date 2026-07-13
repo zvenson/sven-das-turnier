@@ -2,7 +2,7 @@
 
 > Eine sehr sehr coole Software für Spaßturniere — fertig für den Vereinsabend.
 
-WordPress-Plugin für Turniere in **allen Sportarten, in denen zwei gegeneinander antreten** — Tischtennis, Tennis, Badminton, Squash, Kicker, Dart, Billard, Schach, Federball auf der Wiese … Wenn es zwei Namen und einen Sieger gibt, passt es. Gruppen mit Drag-and-Drop, Round-Robin-Vorrunde, Doppel-KO-Endrunde (Gold + Silber) inkl. Trostrunde und Spiel um Platz 3, wahlweise **Satz-Modus mit Satz-Ergebnissen** (Tennis, Tischtennis, Badminton …) und **„Nur Gruppenphase"-Format**, Live-Seite mit Auto-Refresh für den Beamer im Vereinsheim, Olympia-Treppchen am Ende.
+WordPress-Plugin für Turniere in **allen Sportarten, in denen zwei gegeneinander antreten** — Tischtennis, Tennis, Badminton, Squash, Kicker, Billard, Schach, Federball auf der Wiese … Wenn es zwei Namen und einen Sieger gibt, passt es. Gruppen mit Drag-and-Drop, Round-Robin-Vorrunde, Doppel-KO-Endrunde (Gold + Silber) inkl. Trostrunde und Spiel um Platz 3, wahlweise **Satz-Modus mit Satz-Ergebnissen** (Tennis, Tischtennis, Badminton …) und **„Nur Gruppenphase"-Format**, Live-Seite mit Auto-Refresh für den Beamer im Vereinsheim, Olympia-Treppchen am Ende.
 
 Entwickelt für die **Weller Open** (Open-Air Tischtennisturnier des TV Welle) — im Einsatz aber sportart-unabhängig.
 
@@ -12,7 +12,7 @@ Das Plugin kennt keine sportart-spezifischen Regeln, sondern nur **1-gegen-1-Due
 
 | Modus | Passt für |
 |-------|-----------|
-| **Standard** (Sieg/Niederlage per Klick) | Kicker, Dart, Schach, Boule, Mario Kart, jedes „einer gewinnt"-Format |
+| **Standard** (Sieg/Niederlage per Klick) | Kicker, Schach, Boule, Mario Kart, jedes „einer gewinnt"-Format |
 | **Satz-Modus** (Ergebnisse wie `6:4, 3:6, 7:5`, Best of 1/3/5/7) | Tennis, Tischtennis, Badminton, Squash, Volleyball 1v1, Beachminton |
 
 ![Endergebnis-Podium mit Gold/Silber/Bronze](docs/screenshots/podium.png)
